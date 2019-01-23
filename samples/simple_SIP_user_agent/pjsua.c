@@ -19,7 +19,7 @@ pjsip_rx_data *rdata) {
   sleep(5);
   pjsua_call_answer(call_id, 200, NULL, NULL);
   sleep(5);
-  pjsua_call_hangup_all();
+  pjsua_call_hangup(call_id, 200, NULL, NULL);
 
 
 }
