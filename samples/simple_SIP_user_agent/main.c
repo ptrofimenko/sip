@@ -1,12 +1,4 @@
-//#include <pjsua-lib/pjsua.h>
-#include "pjproject-2.6/pjsip/include/pjsua.h" 
- 
-#define THIS_FILE "APP"
- 
-#define SIP_DOMAIN "example.com"
-#define SIP_USER "alice"
-#define SIP_PASSWD "secret"
-
+#include "pjsua.h" 
  
 /* Callback called by the library upon receiving incoming call */
 static void on_incoming_call(pjsua_acc_id acc_id, pjsua_call_id call_id,
@@ -23,7 +15,13 @@ pjsip_rx_data *rdata) {
  	ci.remote_info.ptr));
 
  	/* Automatically answer incoming calls with 200/OK */
- 	pjsua_call_answer(call_id, 200, NULL, NULL);
+ 	pjsua_call_answer(call_id, 180, NULL, NULL);
+  sleep(5);
+  pjsua_call_answer(call_id, 200, NULL, NULL);
+  sleep(5);
+  pjsua_call_hangup_all();
+
+
 }
 
 /* Callback called by the library when call's state has changed */
