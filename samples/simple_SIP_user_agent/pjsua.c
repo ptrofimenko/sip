@@ -1,8 +1,12 @@
 #include "pjsua.h" 
  
+pjsua_conf_port_id conf_slot;
+
 /* Callback called by the library upon receiving incoming call */
 static void on_incoming_call(pjsua_acc_id acc_id, pjsua_call_id call_id,
 pjsip_rx_data *rdata) {
+  
+
   pjsua_call_info ci;
 
   PJ_UNUSED_ARG(acc_id);
@@ -16,10 +20,10 @@ pjsip_rx_data *rdata) {
 
   /* Automatically answer incoming calls with 200/OK */
   pjsua_call_answer(call_id, 180, NULL, NULL);
-  sleep(5);
+  pj_thread_sleep(1000);
   pjsua_call_answer(call_id, 200, NULL, NULL);
-  sleep(5);
-  pjsua_call_hangup(call_id, 200, NULL, NULL);
+  //sleep(5);
+  //pjsua_call_hangup(call_id, 200, NULL, NULL);
 
 
 }
@@ -38,14 +42,20 @@ static void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
 
 /* Callback called by the library when call's media state has changed */
 static void on_call_media_state(pjsua_call_id call_id) {
+    
     pjsua_call_info ci;
  
     pjsua_call_get_info(call_id, &ci);
  
     if (ci.media_status == PJSUA_CALL_MEDIA_ACTIVE) {
+      
       // When media is active, connect call to sound device.
-      pjsua_conf_connect(ci.conf_slot, 0);
-      pjsua_conf_connect(0, ci.conf_slot);
+      //pjsua_conf_connect(ci.conf_slot, 0);
+      //pjsua_conf_connect(0, ci.conf_slot);
+      pjsua_conf_connect(conf_slot, ci.conf_slot);
+      //pjsua_conf_connect(ci.conf_slot, 0);
+      //pjsua_conf_connect(conf_slot, 0);
+      //pjsua_conf_connect(0, conf_slot);
     }
 }
  
@@ -131,6 +141,51 @@ int main(int argc, char *argv[]) {
     if (status != PJ_SUCCESS) error_exit("Error making call", status);
   }
  
+
+  //pjsua_set_null_snd_dev();
+
+
+  pj_caching_pool cp;
+  pjmedia_endpt *med_endpt;
+  pj_pool_t *pool;
+  pjmedia_port *port;
+    
+    
+
+    pj_caching_pool_init(&cp, &pj_pool_factory_default_policy, 0);
+
+
+    status = pjmedia_endpt_create(&cp.factory, NULL, 1, &med_endpt);
+    //J_ASSERT_RETURN(status == PJ_SUCCESS, 1);
+
+    /* Create memory pool for our file player */
+    pool = pj_pool_create( &cp.factory,     /* pool factory     */
+         "app",     /* pool name.     */
+         1000,      /* init size      */
+         1000,      /* increment size     */
+         NULL       /* callback on error    */
+         );
+
+    status = pjmedia_tonegen_create(pool, 8000, 1, SAMPLES_PER_FRAME, 16, PJMEDIA_TONEGEN_LOOP, &port);
+    //if (status != PJ_SUCCESS)
+    //return 1;
+
+    pjmedia_tone_desc tones[1];
+
+    tones[0].freq1 = 425;
+    tones[0].freq2 = 0;
+    tones[0].on_msec = ON_DURATION;
+    tones[0].off_msec = OFF_DURATION;
+  
+    status = pjmedia_tonegen_play(port, 1, tones, 0);
+    //PJ_ASSERT_RETURN(status==PJ_SUCCESS, 1);
+    
+
+    
+
+    status = pjsua_conf_add_port(pool, port, &conf_slot);
+    pj_assert(status == PJ_SUCCESS);
+
   /* Wait until user press "q" to quit. */
   for (;;) {
     char option[10];

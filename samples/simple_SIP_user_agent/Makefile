@@ -1,7 +1,7 @@
 all: simple_pjsua
 
 simple_pjsua: pjsua.c
-	$(CC) -o $@ $< `pkg-config --cflags --libs libpjproject`
+	$(CC) -g -o $@ $< `pkg-config --cflags --libs libpjproject`
 clean:
 	rm -f main.o main
 
