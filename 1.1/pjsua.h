@@ -9,7 +9,7 @@
 
 #define SAMPLES_PER_FRAME   64
 #define ON_DURATION	    	1000
-#define OFF_DURATION	    4000
+#define OFF_DURATION	    0
 
 #include <unistd.h>
 #include <pjsua-lib/pjsua.h>

@@ -2,6 +2,7 @@
 #define __MAIN_H__
 
 #define THIS_FILE 			"APP"
+#define WAVE_FILE 			"Sound.wav"
  
 #define SIP_DOMAIN 			"example.com"
 #define SIP_USER 			"alice"

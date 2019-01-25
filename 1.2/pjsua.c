@@ -157,25 +157,20 @@ int main(int argc, char *argv[]) {
 
     /* Create memory pool for our file player */
     pool = pj_pool_create( &cp.factory,     /* pool factory     */
-         "app",     /* pool name.     */
-         1000,      /* init size      */
-         1000,      /* increment size     */
+         "wav",     /* pool name.     */
+         4000,      /* init size      */
+         4000,      /* increment size     */
          NULL       /* callback on error    */
          );
 
-    status = pjmedia_tonegen_create(pool, 8000, 1, SAMPLES_PER_FRAME, 16, PJMEDIA_TONEGEN_LOOP, &port);
-    //if (status != PJ_SUCCESS)
-    //return 1;
+    status = pjmedia_wav_player_port_create(  pool, /* memory pool      */
+                WAVE_FILE,  /* file to play     */
+                20, /* ptime.     */
+                0,  /* flags      */
+                0,  /* default buffer   */
+                &port/* returned port    */
+                );
 
-    pjmedia_tone_desc tones[1];
-
-    tones[0].freq1 = 425;
-    tones[0].freq2 = 0;
-    tones[0].on_msec = ON_DURATION;
-    tones[0].off_msec = OFF_DURATION;
-  
-    status = pjmedia_tonegen_play(port, 1, tones, 0);
-    //PJ_ASSERT_RETURN(status==PJ_SUCCESS, 1);
     
 
     
