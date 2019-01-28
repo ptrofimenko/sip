@@ -130,75 +130,60 @@ int main(int argc, char *argv[]) {
     status = pjsua_acc_add(&cfg, PJ_TRUE, &acc_id);
     if (status != PJ_SUCCESS) error_exit("Error adding account", status);
   }
- 
-  /* If URL is specified, make call to the URL. */
-  if (argc > 1) {
-    pj_str_t uri = pj_str(argv[1]);
-    status = pjsua_call_make_call(acc_id, &uri, 0, NULL, NULL, NULL);
-    if (status != PJ_SUCCESS) error_exit("Error making call", status);
-  }
- 
 
   pjsua_set_null_snd_dev();
-
 
   pj_caching_pool cp;
   pjmedia_endpt *med_endpt;
   pj_pool_t *pool;
   pjmedia_port *port;
-    
-    
 
-    pj_caching_pool_init(&cp, &pj_pool_factory_default_policy, 0);
+  pj_caching_pool_init(&cp, &pj_pool_factory_default_policy, 0);
 
+  status = pjmedia_endpt_create(&cp.factory, NULL, 1, &med_endpt);
+  //J_ASSERT_RETURN(status == PJ_SUCCESS, 1);
 
-    status = pjmedia_endpt_create(&cp.factory, NULL, 1, &med_endpt);
-    //J_ASSERT_RETURN(status == PJ_SUCCESS, 1);
+  /* Create memory pool for tonegen */
+  pool = pj_pool_create( &cp.factory,     /* pool factory     */
+      "app",     /* pool name.     */
+      1000,      /* init size      */
+      1000,      /* increment size     */
+      NULL       /* callback on error    */
+  );
 
-    /* Create memory pool for our file player */
-    pool = pj_pool_create( &cp.factory,     /* pool factory     */
-         "app",     /* pool name.     */
-         1000,      /* init size      */
-         1000,      /* increment size     */
-         NULL       /* callback on error    */
-         );
+  status = pjmedia_tonegen_create(pool, 8000, 1, SAMPLES_PER_FRAME, 16, PJMEDIA_TONEGEN_LOOP, &port);
+  //if (status != PJ_SUCCESS)
+  //return 1;
 
-    status = pjmedia_tonegen_create(pool, 8000, 1, SAMPLES_PER_FRAME, 16, PJMEDIA_TONEGEN_LOOP, &port);
-    //if (status != PJ_SUCCESS)
-    //return 1;
+  pjmedia_tone_desc tones[1];
 
-    pjmedia_tone_desc tones[1];
-
-    tones[0].freq1 = 425;
-    tones[0].freq2 = 0;
-    tones[0].on_msec = ON_DURATION;
-    tones[0].off_msec = OFF_DURATION;
+  tones[0].freq1 = 425;
+  tones[0].freq2 = 0;
+  tones[0].on_msec = ON_DURATION;
+  tones[0].off_msec = OFF_DURATION;
   
-    status = pjmedia_tonegen_play(port, 1, tones, 0);
-    //PJ_ASSERT_RETURN(status==PJ_SUCCESS, 1);
+  status = pjmedia_tonegen_play(port, 1, tones, 0);
+  //PJ_ASSERT_RETURN(status==PJ_SUCCESS, 1);
     
-
-    
-
-    status = pjsua_conf_add_port(pool, port, &conf_slot);
-    pj_assert(status == PJ_SUCCESS);
-    
+  status = pjsua_conf_add_port(pool, port, &conf_slot);
+  pj_assert(status == PJ_SUCCESS);
+  
   /* Wait until user press "q" to quit. */
-    for (;;) {
-      char option[10];
+  for (;;) {
+    char option[10];
  
-      puts("Press 'h' to hangup all calls, 'q' to quit");
-      if (fgets(option, sizeof(option), stdin) == NULL) {
-        puts("EOF while reading stdin, will quit now..");
-        break;
-      }
-
-      if (option[0] == 'q')
+    puts("Press 'h' to hangup all calls, 'q' to quit");
+    if (fgets(option, sizeof(option), stdin) == NULL) {
+      puts("EOF while reading stdin, will quit now..");
       break;
+    }
 
-      if (option[0] == 'h')
-        pjsua_call_hangup_all();
-      }  
+    if (option[0] == 'q')
+    break;
+
+    if (option[0] == 'h')
+      pjsua_call_hangup_all();
+  }  
   
   /*delete tonegen port*/
   pjmedia_port_destroy(port);
