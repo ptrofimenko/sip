@@ -2,11 +2,30 @@
  
 pjsua_conf_port_id conf_slot;
 
+pj_time_val delay;
+
+pj_timer_entry *entry;
+pj_pool_t *pool;
+pj_timer_heap_t *timer;
+
+int cnt_entries = 0;
+
+static void timer_callback(pj_timer_heap_t *ht, pj_timer_entry *e)
+{
+    pjsua_call_id *call_id = (pjsua_call_id *) e->user_data;
+    pjsua_call_answer(*call_id, 200, NULL, NULL);
+    //pjsua_cancel_timer(e);
+}
+
 /* Callback called by the library upon receiving incoming call */
 static void on_incoming_call(pjsua_acc_id acc_id, pjsua_call_id call_id,
 pjsip_rx_data *rdata) {
   
+  /*pj_timer_entry *entry;*/
 
+  /*entry = (pj_timer_entry*)pj_pool_calloc(pool, 1, sizeof(*entry));
+  if (!entry)
+    return -20;*/
   pjsua_call_info ci;
 
   PJ_UNUSED_ARG(acc_id);
@@ -18,12 +37,19 @@ pjsip_rx_data *rdata) {
   (int)ci.remote_info.slen,
   ci.remote_info.ptr));
 
+  entry[0].id = 100;
+  entry[0].user_data = &call_id;
+  entry[0].cb = &timer_callback;
+
   /* Automatically answer incoming calls with 200/OK */
   pjsua_call_answer(call_id, 180, NULL, NULL);
-  //pj_thread_sleep(1000);
-  pjsua_call_answer(call_id, 200, NULL, NULL);
-  //sleep(5);
-  //pjsua_call_hangup(call_id, 200, NULL, NULL);
+  
+  /*if (cnt_entries > 0) {
+    delay.sec = 20;
+  }*/
+  cnt_entries++;
+  //pjsua_schedule_timer2(*timer_callback, &call_id, 1000);
+  pjsua_schedule_timer(entry, &delay);
 
 
 }
@@ -89,6 +115,10 @@ int main(int argc, char *argv[]) {
     cfg.cb.on_call_media_state = &on_call_media_state;
     cfg.cb.on_call_state = &on_call_state;
 
+    /*20 calls at the same time*/
+    //cfg.max_calls = 20;
+    //cfg.thread_cnt = 10;
+
     pjsua_logging_config_default(&log_cfg);
     log_cfg.console_level = 4;
 
@@ -128,6 +158,47 @@ int main(int argc, char *argv[]) {
     if (status != PJ_SUCCESS) error_exit("Error adding account", status);
   }
 
+  /**********************************************************************/
+  /*create timer*/
+  {
+    
+    pj_status_t status;
+    pj_pool_factory *mem;
+    pj_size_t size;
+    pj_caching_pool cp;
+
+    pj_caching_pool_init(&cp, NULL, 0);  
+    mem = &cp.factory;
+
+    size = pj_timer_heap_mem_size(MAX_ENTRIES) + MAX_ENTRIES * sizeof(pj_timer_entry);
+    pool = pj_pool_create( mem, "timer", size, 4000, NULL);
+
+    if (!pool) {
+      PJ_LOG(3,("test", "...error: unable to create pool of %u bytes",
+      size));
+      return -10;
+    }
+
+    entry = (pj_timer_entry*)pj_pool_calloc(pool, MAX_ENTRIES, sizeof(*entry));
+    if (!entry)
+    return -20;
+
+    int i;
+
+    for (i = 0; i < MAX_ENTRIES ; ++i) {
+      entry[i].cb = &timer_callback;
+    }
+    status = pj_timer_heap_create(pool, MAX_ENTRIES, &timer);
+    if (status != PJ_SUCCESS) {
+        printf("failed to create timer heap");
+        return -30;
+    }
+  
+  }
+  /**********************************************************************/
+
+
+
   pjsua_set_null_snd_dev();
 
 
@@ -164,7 +235,10 @@ int main(int argc, char *argv[]) {
   tones[0].off_msec = OFF_DURATION;
   
   status = pjmedia_tonegen_play(port, 1, tones, 0);
-    
+  
+  delay.sec = 5;
+  delay.msec = 0;
+
 
   /*add port for tonegen*/
   status = pjsua_conf_add_port(pool, port, &conf_slot);
