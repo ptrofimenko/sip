@@ -8,44 +8,59 @@ pj_time_val delay;
 pj_pool_t *pool;
 pj_timer_heap_t *timer;
 
-pjsua_call_id hangup[30];
+int cnt_calls = 0;
 
-int cnt_entries = 0;
+call_info_table call_info[MAX_CALLS];
 
+void call_treatment(int table_slot) {
+  pjsua_call_answer(call_info[table_slot].call_id, 180, NULL, NULL);
+  pjsua_schedule_timer2(&timer_callback2, (void *)&call_info[table_slot].call_id, 2000);
+  pjsua_schedule_timer2(&timer_hangup_callback, (void *)&call_info[table_slot].call_id, 4000);
+}
 
-inline static void timer_hangup_callback(void *user_data)
+static void timer_hangup_callback(void *user_data)
 {
     pjsua_call_id *call_id = (pjsua_call_id *) user_data;
-    
+    printf("!!!!!!!!!!!!*****************hangup_call_id = %d*****************!!!!!!!!!!!!!\n\n\n", *call_id);
+    /*if(*call_id > MAX_CALLS) {
+      printf("!!!!!!!!!!!!*****************CANCEL*****************!!!!!!!!!!!!!");
+      return;
+    }*/
     
     //printf("*****************hangup_call_id = %d = %d = %d*****************", *call_id, &call_id, call_id);
-    printf("*****************hangup_call_id = %d*****************", *call_id);
+    
     
       
     pjsua_call_hangup(*call_id, 200, NULL, NULL);
+    *call_id = FREE;
+    cnt_calls--;
     //pjsua_call_hangup_all();
     //pjsua_cancel_timer(e);
     //cnt_entries--;
 }
 
-static void timer_callback(pj_timer_heap_t *ht, pj_timer_entry *e)
+/*static void timer_callback(pj_timer_heap_t *ht, pj_timer_entry *e)
 {
     pjsua_call_id *call_id = (pjsua_call_id *) e->user_data;
-    printf("*****************TCB_call_id = %d*****************", *call_id);
+    printf("*****************TCB_call_id = %d*****************\n\n\n", *call_id);
+    if(*call_id > MAX_CALLS) {
+      printf("!!!!!!!!!!!!*****************CANCEL*****************!!!!!!!!!!!!!\n\n\n");
+      return;
+    }
     pjsua_call_answer(*call_id, 200, NULL, NULL);
     //pjsua_cancel_timer(e);
     //cnt_entries--;
-}
+}*/
 
 static void timer_callback2(void *user_data)
 {
     pjsua_call_id *call_id = (pjsua_call_id *) user_data;
-    printf("*****************TCB_call_id = %d*****************", *call_id);
-    //pjsua_call_answer(*call_id, 200, NULL, NULL);
+    //printf("*****************TCB_call_id = %d*****************", *call_id);
+    pjsua_call_answer(*call_id, 200, NULL, NULL);
     //pjsua_schedule_timer2(timer_hangup_callback, call_id, 2000);
     //printf("*****************hangup_call_id = %d*****************", *call_id);
     //pjsua_call_hangup(*call_id, 200, NULL, NULL);
-    pjsua_call_hangup_all();
+    //pjsua_call_hangup_all();
     //pjsua_cancel_timer(e);
     //cnt_entries--;
 }
@@ -55,16 +70,27 @@ static void timer_callback2(void *user_data)
 /* Callback called by the library upon receiving incoming call */
 static void on_incoming_call(pjsua_acc_id acc_id, pjsua_call_id call_id,
 pjsip_rx_data *rdata) {
-  
-  pj_timer_entry entry;
-
-  /*entry = (pj_timer_entry*)pj_pool_calloc(pool, 1, sizeof(*entry));
-  if (!entry)
-    return -20;*/
+  if(cnt_calls < PJSUA_MAX_CALLS){
   pjsua_call_info ci;
 
   PJ_UNUSED_ARG(acc_id);
   PJ_UNUSED_ARG(rdata);
+
+  if(cnt_calls >= PJSUA_MAX_CALLS - 1) {
+    pjsua_call_hangup(call_id, 200, NULL, NULL);
+    return;
+  }
+  
+  /*поиск свободного слота в таблице звонков*/
+  int table_slot;
+  for (table_slot = 0; table_slot < PJSUA_MAX_CALLS; table_slot++) {
+      if(call_info[table_slot].call_id == FREE) {
+        call_info[table_slot].call_id = call_id;
+        cnt_calls++;
+        break;
+      }
+  }
+  
 
   pjsua_call_get_info(call_id, &ci);
 
@@ -72,26 +98,21 @@ pjsip_rx_data *rdata) {
   (int)ci.remote_info.slen,
   ci.remote_info.ptr));
 
-  //entry[cnt_entries].id = 100;
-  //entry.user_data = &call_id;
-  //entry.cb = &timer_callback;
-  //pj_timer_entry_init(&entry, 0, &call_id, &timer_callback);
-
   printf("*****************OIC_call_id = %d*****************\n", call_id);
-
+  call_treatment(table_slot);
   /* Automatically answer incoming calls with 200/OK */
-  pjsua_call_answer(call_id, 180, NULL, NULL);
+  //pjsua_call_answer(call_id, 180, NULL, NULL);
   //pjsua_call_answer(call_id, 200, NULL, NULL);
     
   /*if (cnt_entries > 0) {
     delay.sec = 20;
   }*/
-  pjsua_call_answer(call_id, 200, NULL, NULL);
-  pjsua_schedule_timer2(&timer_callback2, (void *)&call_id, 4000);
+  //pjsua_call_answer(call_id, 200, NULL, NULL);
+  //pjsua_schedule_timer2(&timer_callback2, (void *)&call_id, 2000);
   //pjsua_call_answer(call_id, 200, NULL, NULL);
   //pjsua_schedule_timer2(&timer_hangup_callback, &call_id, 4000);
   //pjsua_schedule_timer(&entry, &delay);
-  cnt_entries++;
+  }
 
 
 }
@@ -137,6 +158,13 @@ int main(int argc, char *argv[]) {
   pjsua_acc_id acc_id;
   pj_status_t status;
 
+  /*инициализация таблицы информации о звонках*/
+  {
+    int i;
+    for (i = 0; i < MAX_CALLS; i++) {
+      call_info[i].call_id = FREE;
+    }
+  }
   /* Create pjsua first! */
   status = pjsua_create();
   if (status != PJ_SUCCESS) error_exit("Error in pjsua_create()", status);
@@ -151,6 +179,7 @@ int main(int argc, char *argv[]) {
   {
     pjsua_config cfg;
     pjsua_logging_config log_cfg;
+    pjsua_media_config med_cfg;
 
     pjsua_config_default(&cfg);
     cfg.cb.on_incoming_call = &on_incoming_call;
@@ -158,13 +187,15 @@ int main(int argc, char *argv[]) {
     cfg.cb.on_call_state = &on_call_state;
 
     /*20 calls at the same time*/
-    cfg.max_calls = 20;
+    cfg.max_calls = MAX_CALLS;
     //cfg.thread_cnt = 20;
 
     pjsua_logging_config_default(&log_cfg);
     log_cfg.console_level = 4;
 
-    status = pjsua_init(&cfg, &log_cfg, NULL);
+    pjsua_media_config_default(&med_cfg);
+
+    status = pjsua_init(&cfg, &log_cfg, &med_cfg);
     if (status != PJ_SUCCESS) error_exit("Error in pjsua_init()", status);
   }
 
