@@ -8,7 +8,25 @@ pj_time_val delay;
 pj_pool_t *pool;
 pj_timer_heap_t *timer;
 
+pjsua_call_id hangup[30];
+
 int cnt_entries = 0;
+
+
+inline static void timer_hangup_callback(void *user_data)
+{
+    pjsua_call_id *call_id = (pjsua_call_id *) user_data;
+    
+    
+    //printf("*****************hangup_call_id = %d = %d = %d*****************", *call_id, &call_id, call_id);
+    printf("*****************hangup_call_id = %d*****************", *call_id);
+    
+      
+    pjsua_call_hangup(*call_id, 200, NULL, NULL);
+    //pjsua_call_hangup_all();
+    //pjsua_cancel_timer(e);
+    //cnt_entries--;
+}
 
 static void timer_callback(pj_timer_heap_t *ht, pj_timer_entry *e)
 {
@@ -23,11 +41,16 @@ static void timer_callback2(void *user_data)
 {
     pjsua_call_id *call_id = (pjsua_call_id *) user_data;
     printf("*****************TCB_call_id = %d*****************", *call_id);
-    pjsua_call_answer(*call_id, 200, NULL, NULL);
-    pjsua_call_hangup(*call_id, 500, NULL, NULL);
+    //pjsua_call_answer(*call_id, 200, NULL, NULL);
+    //pjsua_schedule_timer2(timer_hangup_callback, call_id, 2000);
+    //printf("*****************hangup_call_id = %d*****************", *call_id);
+    //pjsua_call_hangup(*call_id, 200, NULL, NULL);
+    pjsua_call_hangup_all();
     //pjsua_cancel_timer(e);
     //cnt_entries--;
 }
+
+
 
 /* Callback called by the library upon receiving incoming call */
 static void on_incoming_call(pjsua_acc_id acc_id, pjsua_call_id call_id,
@@ -63,8 +86,10 @@ pjsip_rx_data *rdata) {
   /*if (cnt_entries > 0) {
     delay.sec = 20;
   }*/
-  
-  pjsua_schedule_timer2(&timer_callback2, &call_id, 2000);
+  pjsua_call_answer(call_id, 200, NULL, NULL);
+  pjsua_schedule_timer2(&timer_callback2, (void *)&call_id, 4000);
+  //pjsua_call_answer(call_id, 200, NULL, NULL);
+  //pjsua_schedule_timer2(&timer_hangup_callback, &call_id, 4000);
   //pjsua_schedule_timer(&entry, &delay);
   cnt_entries++;
 
@@ -133,8 +158,8 @@ int main(int argc, char *argv[]) {
     cfg.cb.on_call_state = &on_call_state;
 
     /*20 calls at the same time*/
-    cfg.max_calls = 64;
-    cfg.thread_cnt = 64;
+    cfg.max_calls = 20;
+    //cfg.thread_cnt = 20;
 
     pjsua_logging_config_default(&log_cfg);
     log_cfg.console_level = 4;
@@ -216,7 +241,7 @@ int main(int argc, char *argv[]) {
 
 
 
-  pjsua_set_null_snd_dev();
+  //pjsua_set_null_snd_dev();
 
 
   pj_caching_pool cp_tone;
