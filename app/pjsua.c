@@ -1,15 +1,15 @@
 #include "pjsua.h" 
  
-pjsua_conf_port_id conf_slot;
+pjsua_conf_port_id conf_slot[NUM_OF_TONEGENS];
 pjsua_conf_port_id wav_slot;
 
 pj_pool_t *pool;
 pj_timer_heap_t *timer;
 
-pj_caching_pool cp_tone, cp_wav;
-pjmedia_endpt *med_endpt, *med_endpt_wav;
-pj_pool_t *pool_tone, *pool_wav;
-pjmedia_port *port, *port_wav;
+pj_caching_pool cp_tone[NUM_OF_TONEGENS], cp_wav;
+pjmedia_endpt *med_endpt[NUM_OF_TONEGENS], *med_endpt_wav;
+pj_pool_t *pool_tone[NUM_OF_TONEGENS], *pool_wav;
+pjmedia_port *port[NUM_OF_TONEGENS], *port_wav;
 
 int cnt_calls = 0;
 
@@ -18,6 +18,42 @@ call_info_table call_info[MAX_CALLS];
 
  pj_str_t cmp_name[NUMBER_OF_USERS];
  
+
+static void connect_conf_cb(void *user_data) {
+  pjsua_conf_port_id *call_slot = (pjsua_call_id *) user_data;
+  if(*call_slot != FREE) {
+    pjsua_conf_connect(conf_slot[1], *call_slot);
+    pjsua_schedule_timer2(&disconnect_conf_cb, user_data, 1800);
+  }
+}
+
+static void disconnect_conf_cb(void *user_data) {
+  pjsua_conf_port_id *call_slot = (pjsua_call_id *) user_data;
+  if(*call_slot != FREE) {
+    pjsua_conf_disconnect(conf_slot[1], *call_slot);
+    pjsua_schedule_timer2(&connect_conf_cb, user_data, 5000);
+  }
+}
+
+
+
+static void create_tonegen_port(u_int8_t port_num) {
+
+  pj_status_t status;
+
+  pj_caching_pool_init(&cp_tone[port_num], &pj_pool_factory_default_policy, 0);
+  status = pjmedia_endpt_create(&cp_tone[port_num].factory, NULL, 1, &med_endpt[port_num]);
+ 
+  /* Create memory pool for our file player */
+  pool_tone[port_num] = pj_pool_create( &cp_tone[port_num].factory,     /* pool factory     */
+      "tone",     /* pool name.     */
+      1000,      /* init size      */
+      1000,      /* increment size     */
+      NULL       /* callback on error    */
+  );
+
+  status = pjmedia_tonegen_create(pool_tone[port_num], 8000, 1, SAMPLES_PER_FRAME, 16, PJMEDIA_TONEGEN_LOOP, &port[port_num]);
+}
 
 static void create_wav_port() {
   pj_status_t status;
@@ -84,7 +120,15 @@ static void timer_hangup_callback(void *user_data)
     pjsua_call_id *call_id = (pjsua_call_id *) user_data;
              
     pjsua_call_hangup(*call_id, 200, NULL, NULL);
-    *call_id = FREE;
+
+    for(u_int8_t table_slot = 0; table_slot < MAX_CALLS; table_slot++) {
+      if(call_info[table_slot].call_id == *call_id) {
+        call_info[table_slot].call_id = FREE;
+        call_info[table_slot].conf_slot = FREE;
+        break;
+      }
+    }
+    //*call_id = FREE;
     cnt_calls--;
 }
 
@@ -118,16 +162,12 @@ pjsip_rx_data *rdata) {
   (int)ci.remote_info.slen,
   ci.remote_info.ptr));
 
+
   u_int8_t is_404 = 1;
   for (int i = 0; i < NUMBER_OF_USERS; i++) {
       
     if(pj_strcmp(&cmp_name[i], &ci.local_info) == 0) {
       if(cnt_calls < MAX_CALLS) {
-
-        if(cnt_calls >= PJSUA_MAX_CALLS - 1) {
-          pjsua_call_hangup(call_id, 200, NULL, NULL);
-          return;
-        }
   
         /*search for free slot in call table*/
         u_int8_t table_slot;
@@ -146,8 +186,8 @@ pjsip_rx_data *rdata) {
       else {
         pjsua_call_answer(call_id, BUSY, NULL, NULL);
       }
-      is_404 = 0;
-      break;
+    is_404 = 0;
+    break;
     }
   }
   if(is_404) {
@@ -161,7 +201,17 @@ static void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
 
   PJ_UNUSED_ARG(e);
 
+  
   pjsua_call_get_info(call_id, &ci);
+  /*if(ci.state == PJSIP_INV_STATE_DISCONNECTED) {
+    for(u_int8_t table_slot = 0; table_slot < MAX_CALLS; table_slot++) {
+      if(call_info[table_slot].call_id == call_id) {
+        call_info[table_slot].call_id = FREE;
+        call_info[table_slot].conf_slot = FREE;
+        break;
+      }
+    }
+  }*/
   PJ_LOG(3,(THIS_FILE, "Call %d state=%.*s", call_id,
   (int)ci.state_text.slen,
   ci.state_text.ptr));
@@ -171,22 +221,34 @@ static void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
 static void on_call_media_state(pjsua_call_id call_id) {
     
     pjsua_call_info ci;
- 
+
     pjsua_call_get_info(call_id, &ci);
-    printf("!!!!!!!!!!!!!%s!!!!!!!!!!!!!!\n\n\n", ci.local_info);
+
+    u_int8_t table_slot;
+    for( table_slot = 0; table_slot < MAX_CALLS; table_slot++) {
+      if(call_info[table_slot].call_id == call_id) {
+        call_info[table_slot].conf_slot = ci.conf_slot;
+        break;
+      }
+    }
+    
+    //pjsua_conf_connect(conf_slot[1], ci.conf_slot);
+    pjsua_conf_connect(conf_slot[1], call_info[table_slot].conf_slot);
+
+    pjsua_schedule_timer2(&disconnect_conf_cb, (void *)&call_info[table_slot].conf_slot, 1800);
 
     if (ci.media_status == PJSUA_CALL_MEDIA_ACTIVE) {
       // When media is active, connect call to tonegen.
       //pjsua_conf_connect(conf_slot, ci.conf_slot);
       if(pj_strcmp(&ci.local_info, &cmp_name[0]) == 0) {
-        pjsua_conf_connect(conf_slot, ci.conf_slot);
+        pjsua_conf_connect(conf_slot[0], ci.conf_slot);
       }
       if(pj_strcmp(&ci.local_info, &cmp_name[1]) == 0) {
         pjsua_conf_connect(wav_slot, ci.conf_slot);
       }
       if(pj_strcmp(&ci.local_info, &cmp_name[2]) == 0) {
         pjsua_conf_connect(wav_slot, ci.conf_slot);
-        pjsua_conf_connect(conf_slot, ci.conf_slot);
+        pjsua_conf_connect(conf_slot[0], ci.conf_slot);
       }
     }
 }
@@ -292,23 +354,8 @@ int main(int argc, char *argv[]) {
    
   create_wav_port();
 
-  pj_caching_pool_init(&cp_tone, &pj_pool_factory_default_policy, 0);
-
-
-  status = pjmedia_endpt_create(&cp_tone.factory, NULL, 1, &med_endpt);
-    //J_ASSERT_RETURN(status == PJ_SUCCESS, 1);
-
-    /* Create memory pool for our file player */
-  pool_tone = pj_pool_create( &cp_tone.factory,     /* pool factory     */
-      "app",     /* pool name.     */
-      1000,      /* init size      */
-      1000,      /* increment size     */
-      NULL       /* callback on error    */
-  );
-
-  status = pjmedia_tonegen_create(pool_tone, 8000, 1, SAMPLES_PER_FRAME, 16, PJMEDIA_TONEGEN_LOOP, &port);
-  //if (status != PJ_SUCCESS)
-  //return 1;
+  
+  create_tonegen_port(0);
 
   pjmedia_tone_desc tones[1];
 
@@ -316,11 +363,36 @@ int main(int argc, char *argv[]) {
   tones[0].freq2 = 0;
   tones[0].on_msec = ON_DURATION;
   tones[0].off_msec = OFF_DURATION;
+
+  create_tonegen_port(0);
+  status = pjmedia_tonegen_play(port[0], 1, tones, 0);
+
+  pjmedia_tone_digit digits[3];
+
+  digits[0].digit = '0';
+  digits[0].on_msec = ON_DURATION_DIG;
+  digits[0].off_msec = OFF_DURATION_DIG;
+
+  digits[1].digit = '1';
+  digits[1].on_msec = ON_DURATION_DIG;
+  digits[1].off_msec = OFF_DURATION_DIG;
+
+  digits[2].digit = '2';
+  digits[2].on_msec = ON_DURATION_DIG;
+  digits[2].off_msec = OFF_DURATION_DIG;
+
   
-  status = pjmedia_tonegen_play(port, 1, tones, 0);
+  create_tonegen_port(1);
+  status = pjmedia_tonegen_play_digits(port[1], 3, digits, 0);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
+    
 
   /*add port for tonegen*/
-  status = pjsua_conf_add_port(pool_tone, port, &conf_slot);
+  status = pjsua_conf_add_port(pool_tone[0], port[0], &conf_slot[0]);
+  pj_assert(status == PJ_SUCCESS);
+   
+  /*add port for tonegen digits*/
+  status = pjsua_conf_add_port(pool_tone[1], port[1], &conf_slot[1]);
   pj_assert(status == PJ_SUCCESS);
     
   /* Wait until user press "q" to quit. */
@@ -340,19 +412,23 @@ int main(int argc, char *argv[]) {
       pjsua_call_hangup_all();
   }  
   
-  /*delete tonegen port*/
-  pjmedia_port_destroy(port);
+  /*destroy tonegens*/
+  for(int i = 0; i < NUM_OF_TONEGENS; i++) {
+    pjmedia_port_destroy(port[i]);  
+    pj_pool_release(pool_tone[i]);
+    pjmedia_endpt_destroy(med_endpt[i]);
+    pj_caching_pool_destroy(&cp_tone[i]);
+  }
+
+  /*destroy wav*/
+  pjmedia_port_destroy(port_wav);  
+  pj_pool_release(pool_wav);
+  pjmedia_endpt_destroy(med_endpt_wav);
+  pj_caching_pool_destroy(&cp_wav);
+
 
   /*release app pool*/
   pj_pool_release(pool);
-  pj_pool_release(pool_tone);
-
-  /*delete endpoint*/
-  pjmedia_endpt_destroy(med_endpt);
-
-  /* delete pool */
-  //pj_caching_pool_destroy(&cp);
-  pj_caching_pool_destroy(&cp_tone);
 
 
   pjsua_destroy();

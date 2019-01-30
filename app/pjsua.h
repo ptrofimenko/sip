@@ -15,6 +15,10 @@
 #define SAMPLES_PER_FRAME   64
 #define ON_DURATION	    	1000
 #define OFF_DURATION	    3000
+#define ON_DURATION_DIG	   	500
+#define OFF_DURATION_DIG    100
+
+#define NUM_OF_TONEGENS		2
 
 #define MAX_ENTRIES			64
 #define MAX_CALLS			20
@@ -22,10 +26,10 @@
 /*duration of ringing in msec*/
 #define RINGING_DURATION 	2000
 /*hangup timer*/
-#define ONCALL_DURATION		8000
+#define ONCALL_DURATION		5000
 
 /*free slot value in calls table*/
-#define FREE -10
+#define FREE 50
 /*answer means callee is busy*/
 #define BUSY 486
 #define URI_NOT_FOUND 404
@@ -38,13 +42,21 @@
 
 typedef struct {
 	pjsua_call_id call_id;
+	pjsua_conf_port_id conf_slot;
 } call_info_table;
 
 static void call_treatment(int table_slot);
-static void timer_hangup_callback(void *user_data);
-static void timer_callback2(void *user_data);
+
 static void acc_add(char acc_name[], pjsua_acc_id *acc_id);
 static void error_exit(const char *title, pj_status_t status);
 static void create_wav_port();
+static void create_tonegen_port(u_int8_t port_num);
+static void create_tonegen_dig_port(u_int8_t port_num);
+
+
+static void timer_callback2(void *user_data);
+static void timer_hangup_callback(void *user_data);
+static void disconnect_conf_cb(void *user_data);
+static void connect_conf_cb(void *user_data);
 
 #endif
