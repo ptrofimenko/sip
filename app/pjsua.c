@@ -11,7 +11,35 @@ int cnt_calls = 0;
 
 call_info_table call_info[MAX_CALLS];
 
-void call_treatment(int table_slot) {
+
+ pj_str_t cmp_name[NUMBER_OF_USERS];
+ 
+
+static void acc_add(char acc_name[], pjsua_acc_id *acc_id) {
+  pj_status_t status;
+
+  pjsua_acc_config cfg;
+  char *id = malloc(sizeof(char) * (strlen(acc_name) + strlen(SIP_DOMAIN) + 5));
+
+  sprintf(id, "sip:%s@%s", acc_name, SIP_DOMAIN);
+
+  pjsua_acc_config_default(&cfg);
+  //cfg.id = pj_str("sip:" acc_name "@" SIP_DOMAIN);
+  cfg.id = pj_str(id);
+  cfg.reg_uri = pj_str("sip:" SIP_DOMAIN);
+  cfg.cred_count = 1;
+  cfg.cred_info[0].realm = pj_str(SIP_DOMAIN);
+  cfg.cred_info[0].scheme = pj_str("digest");
+  cfg.cred_info[0].username = pj_str(acc_name);
+  cfg.cred_info[0].data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
+  cfg.cred_info[0].data = pj_str(SIP_PASSWD);
+ 
+  status = pjsua_acc_add(&cfg, PJ_TRUE, acc_id);
+  if (status != PJ_SUCCESS) error_exit("Error adding account", status);
+  free(id);
+}
+
+static void call_treatment(int table_slot) {
   pjsua_call_answer(call_info[table_slot].call_id, 180, NULL, NULL);
   /*accept(200) timer*/
   pjsua_schedule_timer2(&timer_callback2, (void *)&call_info[table_slot].call_id, RINGING_DURATION);
@@ -53,35 +81,47 @@ pjsip_rx_data *rdata) {
   PJ_UNUSED_ARG(rdata);
 
   pjsua_call_get_info(call_id, &ci);
+  
+  printf("!!!!!!!!!!!!%s!!!!!!!!!!!!!\n\n\n", ci.local_info);
 
   PJ_LOG(3,(THIS_FILE, "Incoming call from %.*s!!",
   (int)ci.remote_info.slen,
   ci.remote_info.ptr));
 
+  u_int8_t is_404 = 1;
+  for (int i = 0; i < NUMBER_OF_USERS; i++) {
+      
+    if(pj_strcmp(&cmp_name[i], &ci.local_info) == 0) {
+      if(cnt_calls < MAX_CALLS) {
 
-  if(cnt_calls < MAX_CALLS) {
-
-    if(cnt_calls >= PJSUA_MAX_CALLS - 1) {
-      pjsua_call_hangup(call_id, 200, NULL, NULL);
-      return;
-    }
-  
-    /*search for free slot in call table*/
-    u_int8_t table_slot;
-    for (table_slot = 0; table_slot < PJSUA_MAX_CALLS; table_slot++) {
-        if(call_info[table_slot].call_id == FREE) {
-          call_info[table_slot].call_id = call_id;
-          cnt_calls++;
-          break;
+        if(cnt_calls >= PJSUA_MAX_CALLS - 1) {
+          pjsua_call_hangup(call_id, 200, NULL, NULL);
+          return;
         }
-    }
+  
+        /*search for free slot in call table*/
+        u_int8_t table_slot;
+        for (table_slot = 0; table_slot < PJSUA_MAX_CALLS; table_slot++) {
+            if(call_info[table_slot].call_id == FREE) {
+              call_info[table_slot].call_id = call_id;
+              cnt_calls++;
+              break;
+           }
+        }
 
-    /*treatment of incoming call*/
-    call_treatment(table_slot);
+        /*treatment of incoming call*/
+        call_treatment(table_slot);
+      }
+      /* if MAX_CALLS reached - answer 486 (BUSY) */
+      else {
+        pjsua_call_answer(call_id, BUSY, NULL, NULL);
+      }
+      is_404 = 0;
+      break;
+    }
   }
-  /* if MAX_CALLS reached - answer 486 (BUSY) */
-  else {
-    pjsua_call_answer(call_id, BUSY, NULL, NULL);
+  if(is_404) {
+      pjsua_call_answer(call_id, URI_NOT_FOUND, NULL, NULL);
   }
 }
 
@@ -123,8 +163,9 @@ static void error_exit(const char *title, pj_status_t status) {
  * argv[1] may contain URL to call.
  */
 int main(int argc, char *argv[]) {
-  pjsua_acc_id acc_id;
+  
   pj_status_t status;
+  pjsua_acc_id acc_id[NUMBER_OF_USERS];
 
   /*init call table*/
   {
@@ -154,7 +195,7 @@ int main(int argc, char *argv[]) {
     cfg.cb.on_call_media_state = &on_call_media_state;
     cfg.cb.on_call_state = &on_call_state;
 
-    /*20 calls at the same time*/
+    /*set max calls at the same time*/
     cfg.max_calls = MAX_CALLS;
     
     pjsua_logging_config_default(&log_cfg);
@@ -181,7 +222,7 @@ int main(int argc, char *argv[]) {
   if (status != PJ_SUCCESS) error_exit("Error starting pjsua", status);
 
  /* Register to SIP server by creating SIP account. */
-  {
+  /*{
     pjsua_acc_config cfg;
 
     pjsua_acc_config_default(&cfg);
@@ -196,14 +237,16 @@ int main(int argc, char *argv[]) {
  
     status = pjsua_acc_add(&cfg, PJ_TRUE, &acc_id);
     if (status != PJ_SUCCESS) error_exit("Error adding account", status);
+  }*/
+
+  cmp_name[0] = pj_str("<sip:" SIP_USER1 "@" SIP_DOMAIN ">");
+  cmp_name[1] = pj_str("<sip:" SIP_USER2 "@" SIP_DOMAIN ">");
+  cmp_name[2] = pj_str("<sip:" SIP_USER3 "@" SIP_DOMAIN ">");
+
+  char *acc_name[NUMBER_OF_USERS] = {SIP_USER1, SIP_USER2, SIP_USER3};
+  for(int i = 0; i < NUMBER_OF_USERS; i++) {
+    acc_add(acc_name[i], &acc_id[i]);
   }
-
-  /**********************************************************************/
-  
-  /**********************************************************************/
-
-
-
   //pjsua_set_null_snd_dev();
 
 
@@ -213,7 +256,6 @@ int main(int argc, char *argv[]) {
   pjmedia_port *port;
     
     
-
   pj_caching_pool_init(&cp_tone, &pj_pool_factory_default_policy, 0);
 
 
