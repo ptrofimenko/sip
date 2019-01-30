@@ -12,12 +12,18 @@
 #define OFF_DURATION	    0
 
 #define MAX_ENTRIES			64
-#define MAX_CALLS			PJSUA_MAX_CALLS
+#define MAX_CALLS			20
 
 /*duration of ringing in msec*/
 #define RINGING_DURATION 	2000
+/*hangup timer*/
+#define ONCALL_DURATION		4000
 
+/*free slot value in calls table*/
 #define FREE -10
+/*answer means callee is busy*/
+#define BUSY 486
+
 
 #include <unistd.h>
 #include <pjsua-lib/pjsua.h>
