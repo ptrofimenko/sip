@@ -1,11 +1,15 @@
 #include "pjsua.h" 
  
 pjsua_conf_port_id conf_slot;
-
-pj_time_val delay;
+pjsua_conf_port_id wav_slot;
 
 pj_pool_t *pool;
 pj_timer_heap_t *timer;
+
+pj_caching_pool cp_tone, cp_wav;
+pjmedia_endpt *med_endpt, *med_endpt_wav;
+pj_pool_t *pool_tone, *pool_wav;
+pjmedia_port *port, *port_wav;
 
 int cnt_calls = 0;
 
@@ -14,6 +18,34 @@ call_info_table call_info[MAX_CALLS];
 
  pj_str_t cmp_name[NUMBER_OF_USERS];
  
+
+static void create_wav_port() {
+  pj_status_t status;
+
+  pj_caching_pool_init(&cp_wav, &pj_pool_factory_default_policy, 0);
+
+  status = pjmedia_endpt_create(&cp_wav.factory, NULL, 1, &med_endpt_wav);
+
+  /* Create memory pool for our file player */
+  pool_wav = pj_pool_create( &cp_wav.factory,     /* pool factory     */
+       "wav",     /* pool name.     */
+       4000,      /* init size      */
+       4000,      /* increment size     */
+       NULL       /* callback on error    */
+  );
+
+  status = pjmedia_wav_player_port_create(  pool_wav, /* memory pool      */
+       WAVE_FILE,  /* file to play     */
+       20, /* ptime.     */
+       0,  /* flags      */
+       0,  /* default buffer   */
+       &port_wav/* returned port    */
+  );
+
+  status = pjsua_conf_add_port(pool_wav, port_wav, &wav_slot);
+  pj_assert(status == PJ_SUCCESS);
+}
+
 
 static void acc_add(char acc_name[], pjsua_acc_id *acc_id) {
   pj_status_t status;
@@ -81,8 +113,6 @@ pjsip_rx_data *rdata) {
   PJ_UNUSED_ARG(rdata);
 
   pjsua_call_get_info(call_id, &ci);
-  
-  printf("!!!!!!!!!!!!%s!!!!!!!!!!!!!\n\n\n", ci.local_info);
 
   PJ_LOG(3,(THIS_FILE, "Incoming call from %.*s!!",
   (int)ci.remote_info.slen,
@@ -143,10 +173,21 @@ static void on_call_media_state(pjsua_call_id call_id) {
     pjsua_call_info ci;
  
     pjsua_call_get_info(call_id, &ci);
- 
+    printf("!!!!!!!!!!!!!%s!!!!!!!!!!!!!!\n\n\n", ci.local_info);
+
     if (ci.media_status == PJSUA_CALL_MEDIA_ACTIVE) {
       // When media is active, connect call to tonegen.
-      pjsua_conf_connect(conf_slot, ci.conf_slot);
+      //pjsua_conf_connect(conf_slot, ci.conf_slot);
+      if(pj_strcmp(&ci.local_info, &cmp_name[0]) == 0) {
+        pjsua_conf_connect(conf_slot, ci.conf_slot);
+      }
+      if(pj_strcmp(&ci.local_info, &cmp_name[1]) == 0) {
+        pjsua_conf_connect(wav_slot, ci.conf_slot);
+      }
+      if(pj_strcmp(&ci.local_info, &cmp_name[2]) == 0) {
+        pjsua_conf_connect(wav_slot, ci.conf_slot);
+        pjsua_conf_connect(conf_slot, ci.conf_slot);
+      }
     }
 }
  
@@ -247,15 +288,10 @@ int main(int argc, char *argv[]) {
   for(int i = 0; i < NUMBER_OF_USERS; i++) {
     acc_add(acc_name[i], &acc_id[i]);
   }
-  //pjsua_set_null_snd_dev();
+  pjsua_set_null_snd_dev();
+   
+  create_wav_port();
 
-
-  pj_caching_pool cp_tone;
-  pjmedia_endpt *med_endpt;
-  pj_pool_t *pool_tone;
-  pjmedia_port *port;
-    
-    
   pj_caching_pool_init(&cp_tone, &pj_pool_factory_default_policy, 0);
 
 
@@ -282,10 +318,6 @@ int main(int argc, char *argv[]) {
   tones[0].off_msec = OFF_DURATION;
   
   status = pjmedia_tonegen_play(port, 1, tones, 0);
-  
-  delay.sec = 5;
-  delay.msec = 0;
-
 
   /*add port for tonegen*/
   status = pjsua_conf_add_port(pool_tone, port, &conf_slot);

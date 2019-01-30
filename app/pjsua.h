@@ -2,6 +2,7 @@
 #define __MAIN_H__
 
 #define THIS_FILE 			"APP"
+#define WAVE_FILE 			"Sound.wav"
  
 #define SIP_DOMAIN 			"10.25.72.55"
 #define SIP_USER1 			"alice"
@@ -13,7 +14,7 @@
 
 #define SAMPLES_PER_FRAME   64
 #define ON_DURATION	    	1000
-#define OFF_DURATION	    0
+#define OFF_DURATION	    3000
 
 #define MAX_ENTRIES			64
 #define MAX_CALLS			20
@@ -21,7 +22,7 @@
 /*duration of ringing in msec*/
 #define RINGING_DURATION 	2000
 /*hangup timer*/
-#define ONCALL_DURATION		4000
+#define ONCALL_DURATION		8000
 
 /*free slot value in calls table*/
 #define FREE -10
@@ -44,5 +45,6 @@ static void timer_hangup_callback(void *user_data);
 static void timer_callback2(void *user_data);
 static void acc_add(char acc_name[], pjsua_acc_id *acc_id);
 static void error_exit(const char *title, pj_status_t status);
+static void create_wav_port();
 
 #endif
