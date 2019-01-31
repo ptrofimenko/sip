@@ -21,15 +21,16 @@
 #define NUM_OF_TONEGENS		2
 
 #define MAX_ENTRIES			64
-#define MAX_CALLS			20
+#define MAX_CALLS			PJSUA_MAX_CALLS
+#define MAX_ONCALL			20
 
 /*duration of ringing in msec*/
 #define RINGING_DURATION 	2000
 /*hangup timer*/
-#define ONCALL_DURATION		5000
+#define ONCALL_DURATION		2000
 
 /*free slot value in calls table*/
-#define FREE 50
+#define FREE -5
 /*answer means callee is busy*/
 #define BUSY 486
 #define URI_NOT_FOUND 404

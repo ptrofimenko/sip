@@ -13,7 +13,7 @@ pjmedia_port *port[NUM_OF_TONEGENS], *port_wav;
 
 int cnt_calls = 0;
 
-call_info_table call_info[MAX_CALLS];
+call_info_table call_info[MAX_ONCALL];
 
 
  pj_str_t cmp_name[NUMBER_OF_USERS];
@@ -112,24 +112,18 @@ static void call_treatment(int table_slot) {
   /*accept(200) timer*/
   pjsua_schedule_timer2(&timer_callback2, (void *)&call_info[table_slot].call_id, RINGING_DURATION);
   /*hangup timer*/
-  pjsua_schedule_timer2(&timer_hangup_callback, (void *)&call_info[table_slot].call_id, ONCALL_DURATION);
+  pjsua_schedule_timer2(&timer_hangup_callback, (void *)&call_info[table_slot].call_id, RINGING_DURATION + ONCALL_DURATION);
 }
 
 static void timer_hangup_callback(void *user_data)
 {
     pjsua_call_id *call_id = (pjsua_call_id *) user_data;
-             
-    pjsua_call_hangup(*call_id, 200, NULL, NULL);
-
-    for(u_int8_t table_slot = 0; table_slot < MAX_CALLS; table_slot++) {
-      if(call_info[table_slot].call_id == *call_id) {
-        call_info[table_slot].call_id = FREE;
-        call_info[table_slot].conf_slot = FREE;
-        break;
-      }
+    //cnt_calls--;     
+    if (*call_id != FREE) {
+      pjsua_call_hangup(*call_id, 200, NULL, NULL);
+      //cnt_calls--;
     }
-    //*call_id = FREE;
-    cnt_calls--;
+
 }
 
 /*template callback pjsua_schedule_timer*/
@@ -166,15 +160,14 @@ pjsip_rx_data *rdata) {
   u_int8_t is_404 = 1;
   for (int i = 0; i < NUMBER_OF_USERS; i++) {
       
-    if(pj_strcmp(&cmp_name[i], &ci.local_info) == 0) {
-      if(cnt_calls < MAX_CALLS) {
-  
+    //if(pj_strcmp(&cmp_name[i], &ci.local_info) == 0) {
+      if(cnt_calls < MAX_ONCALL) {
+        cnt_calls++;
         /*search for free slot in call table*/
         u_int8_t table_slot;
-        for (table_slot = 0; table_slot < PJSUA_MAX_CALLS; table_slot++) {
+        for (table_slot = 0; table_slot < MAX_ONCALL; table_slot++) {
             if(call_info[table_slot].call_id == FREE) {
               call_info[table_slot].call_id = call_id;
-              cnt_calls++;
               break;
            }
         }
@@ -188,7 +181,7 @@ pjsip_rx_data *rdata) {
       }
     is_404 = 0;
     break;
-    }
+    //}
   }
   if(is_404) {
       pjsua_call_answer(call_id, URI_NOT_FOUND, NULL, NULL);
@@ -197,21 +190,25 @@ pjsip_rx_data *rdata) {
 
 /* Callback called by the library when call's state has changed */
 static void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
+
   pjsua_call_info ci;
 
   PJ_UNUSED_ARG(e);
-
   
   pjsua_call_get_info(call_id, &ci);
-  /*if(ci.state == PJSIP_INV_STATE_DISCONNECTED) {
-    for(u_int8_t table_slot = 0; table_slot < MAX_CALLS; table_slot++) {
+  if(ci.state == PJSIP_INV_STATE_DISCONNECTED) {
+    for(u_int8_t table_slot = 0; table_slot < MAX_ONCALL; table_slot++) {
       if(call_info[table_slot].call_id == call_id) {
+        /*free slot in call_info table*/   
+        pjsua_call_hangup(call_id, 200, NULL, NULL);
         call_info[table_slot].call_id = FREE;
         call_info[table_slot].conf_slot = FREE;
+        cnt_calls--;
         break;
       }
     }
-  }*/
+  }
+
   PJ_LOG(3,(THIS_FILE, "Call %d state=%.*s", call_id,
   (int)ci.state_text.slen,
   ci.state_text.ptr));
@@ -225,28 +222,29 @@ static void on_call_media_state(pjsua_call_id call_id) {
     pjsua_call_get_info(call_id, &ci);
 
     u_int8_t table_slot;
-    for( table_slot = 0; table_slot < MAX_CALLS; table_slot++) {
+    for( table_slot = 0; table_slot < MAX_ONCALL; table_slot++) {
       if(call_info[table_slot].call_id == call_id) {
         call_info[table_slot].conf_slot = ci.conf_slot;
         break;
       }
     }
     
-    //pjsua_conf_connect(conf_slot[1], ci.conf_slot);
+    /*dtmf digits connect to all accs*/
     pjsua_conf_connect(conf_slot[1], call_info[table_slot].conf_slot);
-
     pjsua_schedule_timer2(&disconnect_conf_cb, (void *)&call_info[table_slot].conf_slot, 1800);
 
     if (ci.media_status == PJSUA_CALL_MEDIA_ACTIVE) {
-      // When media is active, connect call to tonegen.
-      //pjsua_conf_connect(conf_slot, ci.conf_slot);
+      /*joining media sources based on account name*/
       if(pj_strcmp(&ci.local_info, &cmp_name[0]) == 0) {
+        /*tonegen connect*/
         pjsua_conf_connect(conf_slot[0], ci.conf_slot);
       }
       if(pj_strcmp(&ci.local_info, &cmp_name[1]) == 0) {
+        /*wav connect*/
         pjsua_conf_connect(wav_slot, ci.conf_slot);
       }
       if(pj_strcmp(&ci.local_info, &cmp_name[2]) == 0) {
+        /*tonegen and wav connect*/
         pjsua_conf_connect(wav_slot, ci.conf_slot);
         pjsua_conf_connect(conf_slot[0], ci.conf_slot);
       }
@@ -255,10 +253,12 @@ static void on_call_media_state(pjsua_call_id call_id) {
  
 /* Display error and exit application */
 static void error_exit(const char *title, pj_status_t status) {
-    pjsua_perror(THIS_FILE, title, status);
+  
+  pjsua_perror(THIS_FILE, title, status);
   pjsua_destroy();
   exit(1);
 }
+
 
 /*
  * main()
@@ -273,7 +273,7 @@ int main(int argc, char *argv[]) {
   /*init call table*/
   {
     int i;
-    for (i = 0; i < MAX_CALLS; i++) {
+    for (i = 0; i < MAX_ONCALL; i++) {
       call_info[i].call_id = FREE;
     }
   }
@@ -324,51 +324,36 @@ int main(int argc, char *argv[]) {
   status = pjsua_start();
   if (status != PJ_SUCCESS) error_exit("Error starting pjsua", status);
 
- /* Register to SIP server by creating SIP account. */
-  /*{
-    pjsua_acc_config cfg;
-
-    pjsua_acc_config_default(&cfg);
-    cfg.id = pj_str("sip:" SIP_USER "@" SIP_DOMAIN);
-    cfg.reg_uri = pj_str("sip:" SIP_DOMAIN);
-    cfg.cred_count = 1;
-    cfg.cred_info[0].realm = pj_str(SIP_DOMAIN);
-    cfg.cred_info[0].scheme = pj_str("digest");
-    cfg.cred_info[0].username = pj_str(SIP_USER);
-    cfg.cred_info[0].data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
-    cfg.cred_info[0].data = pj_str(SIP_PASSWD);
- 
-    status = pjsua_acc_add(&cfg, PJ_TRUE, &acc_id);
-    if (status != PJ_SUCCESS) error_exit("Error adding account", status);
-  }*/
-
   cmp_name[0] = pj_str("<sip:" SIP_USER1 "@" SIP_DOMAIN ">");
   cmp_name[1] = pj_str("<sip:" SIP_USER2 "@" SIP_DOMAIN ">");
   cmp_name[2] = pj_str("<sip:" SIP_USER3 "@" SIP_DOMAIN ">");
 
+  /*register defined users*/
   char *acc_name[NUMBER_OF_USERS] = {SIP_USER1, SIP_USER2, SIP_USER3};
   for(int i = 0; i < NUMBER_OF_USERS; i++) {
     acc_add(acc_name[i], &acc_id[i]);
   }
+  /*wav doesn't work without it*/
   pjsua_set_null_snd_dev();
    
+  /*create wav slot*/
   create_wav_port();
-
-  
-  create_tonegen_port(0);
 
   pjmedia_tone_desc tones[1];
 
+  /*tone config*/
   tones[0].freq1 = 425;
   tones[0].freq2 = 0;
   tones[0].on_msec = ON_DURATION;
   tones[0].off_msec = OFF_DURATION;
 
+  /*create tone port*/
   create_tonegen_port(0);
   status = pjmedia_tonegen_play(port[0], 1, tones, 0);
 
   pjmedia_tone_digit digits[3];
 
+  /*digits config*/
   digits[0].digit = '0';
   digits[0].on_msec = ON_DURATION_DIG;
   digits[0].off_msec = OFF_DURATION_DIG;
@@ -381,17 +366,17 @@ int main(int argc, char *argv[]) {
   digits[2].on_msec = ON_DURATION_DIG;
   digits[2].off_msec = OFF_DURATION_DIG;
 
-  
+  /*create digits port*/
   create_tonegen_port(1);
   status = pjmedia_tonegen_play_digits(port[1], 3, digits, 0);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
     
 
-  /*add port for tonegen*/
+  /*get tonegen slot*/
   status = pjsua_conf_add_port(pool_tone[0], port[0], &conf_slot[0]);
   pj_assert(status == PJ_SUCCESS);
    
-  /*add port for tonegen digits*/
+  /*get digits slot*/
   status = pjsua_conf_add_port(pool_tone[1], port[1], &conf_slot[1]);
   pj_assert(status == PJ_SUCCESS);
     
