@@ -112,16 +112,15 @@ static void call_treatment(int table_slot) {
   /*accept(200) timer*/
   pjsua_schedule_timer2(&timer_callback2, (void *)&call_info[table_slot].call_id, RINGING_DURATION);
   /*hangup timer*/
-  pjsua_schedule_timer2(&timer_hangup_callback, (void *)&call_info[table_slot].call_id, RINGING_DURATION + ONCALL_DURATION);
+  //pjsua_schedule_timer2(&timer_hangup_callback, (void *)&call_info[table_slot].call_id, RINGING_DURATION + ONCALL_DURATION);
 }
 
 static void timer_hangup_callback(void *user_data)
 {
     pjsua_call_id *call_id = (pjsua_call_id *) user_data;
-    //cnt_calls--;     
+      
     if (*call_id != FREE) {
       pjsua_call_hangup(*call_id, 200, NULL, NULL);
-      //cnt_calls--;
     }
 
 }
@@ -199,8 +198,7 @@ static void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
   if(ci.state == PJSIP_INV_STATE_DISCONNECTED) {
     for(u_int8_t table_slot = 0; table_slot < MAX_ONCALL; table_slot++) {
       if(call_info[table_slot].call_id == call_id) {
-        /*free slot in call_info table*/   
-        pjsua_call_hangup(call_id, 200, NULL, NULL);
+        /*free slot in call_info table*/
         call_info[table_slot].call_id = FREE;
         call_info[table_slot].conf_slot = FREE;
         cnt_calls--;
@@ -302,7 +300,7 @@ int main(int argc, char *argv[]) {
     cfg.max_calls = MAX_CALLS;
     
     pjsua_logging_config_default(&log_cfg);
-    log_cfg.console_level = 4;
+    log_cfg.console_level = 2;
 
     pjsua_media_config_default(&med_cfg);
 

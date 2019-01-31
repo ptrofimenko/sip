@@ -27,7 +27,7 @@
 /*duration of ringing in msec*/
 #define RINGING_DURATION 	2000
 /*hangup timer*/
-#define ONCALL_DURATION		2000
+#define ONCALL_DURATION		4000
 
 /*free slot value in calls table*/
 #define FREE -5
