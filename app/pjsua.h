@@ -44,6 +44,7 @@
 typedef struct {
 	pjsua_call_id call_id;
 	pjsua_conf_port_id conf_slot;
+	pj_timer_entry timer_entry;
 } call_info_table;
 
 static void call_treatment(int table_slot);
@@ -56,7 +57,8 @@ static void create_tonegen_dig_port(u_int8_t port_num);
 
 
 static void timer_callback2(void *user_data);
-static void timer_hangup_callback(void *user_data);
+//static void timer_hangup_callback(void *user_data);
+static void timer_hangup_callback(pj_timer_heap_t *ht, pj_timer_entry *e);
 static void disconnect_conf_cb(void *user_data);
 static void connect_conf_cb(void *user_data);
 

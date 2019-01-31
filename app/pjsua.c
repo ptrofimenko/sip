@@ -112,10 +112,19 @@ static void call_treatment(int table_slot) {
   /*accept(200) timer*/
   pjsua_schedule_timer2(&timer_callback2, (void *)&call_info[table_slot].call_id, RINGING_DURATION);
   /*hangup timer*/
+  pj_time_val delay;
+
+  delay.sec = 0;
+  delay.msec = RINGING_DURATION + ONCALL_DURATION;
+
+  call_info[table_slot].timer_entry.cb = &timer_hangup_callback;
+  call_info[table_slot].timer_entry.user_data = (void *)&call_info[table_slot].call_id;
+
+  pjsua_schedule_timer(&call_info[table_slot].timer_entry, &delay);
   //pjsua_schedule_timer2(&timer_hangup_callback, (void *)&call_info[table_slot].call_id, RINGING_DURATION + ONCALL_DURATION);
 }
 
-static void timer_hangup_callback(void *user_data)
+/*static void timer_hangup_callback(void *user_data)
 {
     pjsua_call_id *call_id = (pjsua_call_id *) user_data;
       
@@ -123,6 +132,14 @@ static void timer_hangup_callback(void *user_data)
       pjsua_call_hangup(*call_id, 200, NULL, NULL);
     }
 
+}*/
+
+static void timer_hangup_callback(pj_timer_heap_t *ht, pj_timer_entry *e)
+{
+    pjsua_call_id *call_id = (pjsua_call_id *) e->user_data; 
+    if (*call_id != FREE) {
+      pjsua_call_hangup(*call_id, 200, NULL, NULL);
+    }
 }
 
 /*template callback pjsua_schedule_timer*/
@@ -199,6 +216,7 @@ static void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
     for(u_int8_t table_slot = 0; table_slot < MAX_ONCALL; table_slot++) {
       if(call_info[table_slot].call_id == call_id) {
         /*free slot in call_info table*/
+        pjsua_cancel_timer(&call_info[table_slot].timer_entry);
         call_info[table_slot].call_id = FREE;
         call_info[table_slot].conf_slot = FREE;
         cnt_calls--;
