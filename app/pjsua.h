@@ -42,25 +42,45 @@
 #include <unistd.h>
 #include <pjsua-lib/pjsua.h>
 
+
+pj_oshandle_t file;
+
+pjsua_conf_port_id conf_slot[NUM_OF_TONEGENS];
+pjsua_conf_port_id wav_slot;
+
+pj_caching_pool cp;
+pj_pool_t *pool;
+pj_timer_heap_t *timer;
+
+pj_caching_pool cp_tone[NUM_OF_TONEGENS], cp_wav;
+pjmedia_endpt *med_endpt[NUM_OF_TONEGENS], *med_endpt_wav;
+pj_pool_t *pool_tone[NUM_OF_TONEGENS], *pool_wav;
+pjmedia_port *port[NUM_OF_TONEGENS], *port_wav;
+
+pj_str_t cmp_name[NUMBER_OF_USERS];
+
 typedef struct {
 	pjsua_call_id call_id;
 	pjsua_conf_port_id conf_slot;
 	pj_timer_entry timer_entry;
 } call_info_table;
 
-static void call_treatment(int table_slot);
+call_info_table call_info[MAX_ONCALL];
 
-static void acc_add(char acc_name[], pjsua_acc_id *acc_id);
-static void error_exit(const char *title, pj_status_t status);
-static void create_wav_port();
-static void create_tonegen_port(u_int8_t port_num);
-static void create_tonegen_dig_port(u_int8_t port_num);
+void call_treatment(int table_slot);
+void acc_add(char acc_name[], pjsua_acc_id *acc_id);
+void error_exit(const char *title, pj_status_t status);
+void create_wav_port();
+void create_tonegen_port(u_int8_t port_num);
+void create_tonegen_dig_port(u_int8_t port_num);
 
 
-static void timer_callback2(void *user_data);
-//static void timer_hangup_callback(void *user_data);
-static void timer_hangup_callback(pj_timer_heap_t *ht, pj_timer_entry *e);
-static void disconnect_conf_cb(void *user_data);
-static void connect_conf_cb(void *user_data);
+void timer_callback2(void *user_data);
+void timer_hangup_callback(pj_timer_heap_t *ht, pj_timer_entry *e);
+void disconnect_conf_cb(void *user_data);
+void connect_conf_cb(void *user_data);
+void on_incoming_call(pjsua_acc_id, pjsua_call_id, pjsip_rx_data *);
+void on_call_state(pjsua_call_id, pjsip_event *);
+void on_call_media_state(pjsua_call_id);
 
 #endif
