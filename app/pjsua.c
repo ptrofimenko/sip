@@ -3,6 +3,7 @@
 pjsua_conf_port_id conf_slot[NUM_OF_TONEGENS];
 pjsua_conf_port_id wav_slot;
 
+pj_caching_pool cp;
 pj_pool_t *pool;
 pj_timer_heap_t *timer;
 
@@ -87,7 +88,7 @@ static void acc_add(char acc_name[], pjsua_acc_id *acc_id) {
   pj_status_t status;
 
   pjsua_acc_config cfg;
-  char *id = malloc(sizeof(char) * (strlen(acc_name) + strlen(SIP_DOMAIN) + 5));
+  char *id = pj_pool_alloc(pool, sizeof(char) * (strlen(acc_name) + strlen(SIP_DOMAIN) + 5));
 
   sprintf(id, "sip:%s@%s", acc_name, SIP_DOMAIN);
 
@@ -104,7 +105,7 @@ static void acc_add(char acc_name[], pjsua_acc_id *acc_id) {
  
   status = pjsua_acc_add(&cfg, PJ_TRUE, acc_id);
   if (status != PJ_SUCCESS) error_exit("Error adding account", status);
-  free(id);
+  
 }
 
 static void call_treatment(int table_slot) {
@@ -282,14 +283,13 @@ static void error_exit(const char *title, pj_status_t status) {
  * argv[1] may contain URL to call.
  */
 int main(int argc, char *argv[]) {
-  
+
   pj_status_t status;
   pjsua_acc_id acc_id[NUMBER_OF_USERS];
 
   /*init call table*/
   {
-    int i;
-    for (i = 0; i < MAX_ONCALL; i++) {
+    for (int i = 0; i < MAX_ONCALL; i++) {
       call_info[i].call_id = FREE;
     }
   }
@@ -297,13 +297,18 @@ int main(int argc, char *argv[]) {
   status = pjsua_create();
   if (status != PJ_SUCCESS) error_exit("Error in pjsua_create()", status);
 
-  /* If argument is specified, it's got to be a valid SIP URL */
-  if (argc > 1) {
-    status = pjsua_verify_url(argv[1]);
-    if (status != PJ_SUCCESS) error_exit("Invalid URL in argv", status);
-  }
+  //char *config_str = malloc(sizeof(char) * 1000);
 
- /* Init pjsua */
+  pj_caching_pool_init(&cp, &pj_pool_factory_default_policy, 0);
+
+  pool = pj_pool_create( &cp.factory,     /* pool factory     */
+       "pool",     /* pool name.     */
+       4000,      /* init size      */
+       4000,      /* increment size     */
+       NULL       /* callback on error    */
+  );
+
+  /* Init pjsua */
   {
     pjsua_config cfg;
     pjsua_logging_config log_cfg;

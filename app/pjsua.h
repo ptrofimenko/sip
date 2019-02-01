@@ -3,7 +3,8 @@
 
 #define THIS_FILE 			"APP"
 #define WAVE_FILE 			"Sound.wav"
- 
+#define CONFIG_FILE			"config.xml" 
+
 #define SIP_DOMAIN 			"10.25.72.55"
 #define SIP_USER1 			"alice"
 #define SIP_USER2 			"bob"
