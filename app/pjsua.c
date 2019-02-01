@@ -94,6 +94,23 @@ void error_exit(const char *title, pj_status_t status) {
   exit(1);
 }
 
+void read_config_file(char *argv[], int argc, pj_ssize_t *size, char *config_str) {
+  
+  pj_oshandle_t file;
+
+  pj_status_t status;
+
+  if (argc > 1) {
+    status = pj_file_open(pool, argv[1], PJ_O_RDONLY, &file);
+  }
+  else {
+    status = pj_file_open(pool, CONFIG_FILE, PJ_O_RDONLY, &file);
+  }
+  if (status != PJ_SUCCESS) error_exit("Error in pj_file_open()", status);
+
+  status = pj_file_read(file, (void *) config_str, size);
+  //pj_file_close(file);
+}
 
 /*
  * main()
@@ -127,14 +144,13 @@ int main(int argc, char *argv[]) {
   
   if (status != PJ_SUCCESS) error_exit("Error in pjsua_create()", status);
 
-  char *config_str = pj_pool_alloc(pool, sizeof(char) * 5000);
-  if (argc > 1) {
-    status = pj_file_open(pool, argv[1], PJ_O_RDONLY, &file);
-  }
-  else {
-    status = pj_file_open(pool, CONFIG_FILE, PJ_O_RDONLY, &file);
-  }
-  if (status != PJ_SUCCESS) error_exit("Error in pj_file_open()", status);
+  pj_ssize_t size = sizeof(char) * 5000;
+
+  char *config_str = pj_pool_alloc(pool, size);
+  read_config_file(argv, argc, &size, config_str);
+  
+
+
 
   /* Init pjsua */
   {

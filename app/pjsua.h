@@ -43,7 +43,7 @@
 #include <pjsua-lib/pjsua.h>
 
 
-pj_oshandle_t file;
+
 
 pjsua_conf_port_id conf_slot[NUM_OF_TONEGENS];
 pjsua_conf_port_id wav_slot;
@@ -73,7 +73,7 @@ void error_exit(const char *title, pj_status_t status);
 void create_wav_port();
 void create_tonegen_port(u_int8_t port_num);
 void create_tonegen_dig_port(u_int8_t port_num);
-
+void read_config_file(char *argv[], int argc, pj_ssize_t *size, char *config_str);
 
 void timer_callback2(void *user_data);
 void timer_hangup_callback(pj_timer_heap_t *ht, pj_timer_entry *e);
