@@ -54,6 +54,7 @@ void acc_add(char acc_name[], pjsua_acc_id *acc_id) {
   sprintf(id, "sip:%s@%s", acc_name, SIP_DOMAIN);
 
   pjsua_acc_config_default(&cfg);
+  cfg.register_on_acc_add = PJ_FALSE;
   //cfg.id = pj_str("sip:" acc_name "@" SIP_DOMAIN);
   cfg.id = pj_str(id);
   cfg.reg_uri = pj_str("sip:" SIP_DOMAIN);
@@ -109,7 +110,7 @@ void read_config_file(char *argv[], int argc, pj_ssize_t *size, char *config_str
   if (status != PJ_SUCCESS) error_exit("Error in pj_file_open()", status);
 
   status = pj_file_read(file, (void *) config_str, size);
-  //pj_file_close(file);
+  pj_file_close(file);
 }
 
 /*
@@ -148,10 +149,24 @@ int main(int argc, char *argv[]) {
 
   char *config_str = pj_pool_alloc(pool, size);
   read_config_file(argv, argc, &size, config_str);
+
+  pj_xml_node *root;
+  pj_xml_attr *attr;
+
+  root = pj_xml_parse(pool, config_str, size);
+  if(root == NULL) error_exit("Bad xml config file", -1);
+  pj_str_t acc = pj_str("general");
+  pj_str_t name = pj_str("log-level");
+
+  root = pj_xml_find_node_rec(root, &acc);
+  if(root == NULL) error_exit("config node not found", -1);
+  attr = pj_xml_find_attr(root, &name, NULL);
+  if(attr == NULL) error_exit("config attribute not found", -1);
+
+
+  printf("name = %.*s\n", (int)root->name.slen, root->name);
+  printf("attr = %.*s\n", (int)attr->value.slen, attr->value);
   
-
-
-
   /* Init pjsua */
   {
     pjsua_config cfg;
@@ -167,7 +182,7 @@ int main(int argc, char *argv[]) {
     cfg.max_calls = MAX_CALLS;
     
     pjsua_logging_config_default(&log_cfg);
-    log_cfg.console_level = 2;
+    log_cfg.console_level = pj_strtol(&attr->value);
 
     pjsua_media_config_default(&med_cfg);
 

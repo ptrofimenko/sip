@@ -52,7 +52,7 @@ pjsip_rx_data *rdata) {
   u_int8_t is_404 = 1;
   for (int i = 0; i < NUMBER_OF_USERS; i++) {
       
-    //if(pj_strcmp(&cmp_name[i], &ci.local_info) == 0) {
+    if(pj_strcmp(&cmp_name[i], &ci.local_info) == 0) {
       if(cnt_calls < MAX_ONCALL) {
         cnt_calls++;
         /*search for free slot in call table*/
@@ -73,7 +73,7 @@ pjsip_rx_data *rdata) {
       }
     is_404 = 0;
     break;
-    //}
+    }
   }
   if(is_404) {
       pjsua_call_answer(call_id, URI_NOT_FOUND, NULL, NULL);
