@@ -1,5 +1,7 @@
 #include "pjsua.h" 
 
+
+
 void create_tonegen_port(u_int8_t port_num) {
 
   pj_status_t status;
@@ -45,25 +47,16 @@ void create_wav_port() {
   pj_assert(status == PJ_SUCCESS);
 }
 
-void acc_add(char acc_name[], pjsua_acc_id *acc_id) {
+void acc_add(pj_str_t acc_uri, pjsua_acc_id *acc_id) {
   pj_status_t status;
 
   pjsua_acc_config cfg;
-  char *id = pj_pool_alloc(pool, sizeof(char) * (strlen(acc_name) + strlen(SIP_DOMAIN) + 5));
-
-  sprintf(id, "sip:%s@%s", acc_name, SIP_DOMAIN);
-
+  
   pjsua_acc_config_default(&cfg);
   cfg.register_on_acc_add = PJ_FALSE;
   //cfg.id = pj_str("sip:" acc_name "@" SIP_DOMAIN);
-  cfg.id = pj_str(id);
+  cfg.id = acc_uri;
   cfg.reg_uri = pj_str("sip:" SIP_DOMAIN);
-  cfg.cred_count = 1;
-  cfg.cred_info[0].realm = pj_str(SIP_DOMAIN);
-  cfg.cred_info[0].scheme = pj_str("digest");
-  cfg.cred_info[0].username = pj_str(acc_name);
-  cfg.cred_info[0].data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
-  cfg.cred_info[0].data = pj_str(SIP_PASSWD);
  
   status = pjsua_acc_add(&cfg, PJ_TRUE, acc_id);
   if (status != PJ_SUCCESS) error_exit("Error adding account", status);
@@ -121,7 +114,7 @@ void read_config_file(char *argv[], int argc, pj_ssize_t *size, char *config_str
 int main(int argc, char *argv[]) {
 
   pj_status_t status;
-  pjsua_acc_id acc_id[NUMBER_OF_USERS];
+  pjsua_acc_id acc_id[USER_LIMIT];
 
   /*init call table*/
   {
@@ -150,22 +143,21 @@ int main(int argc, char *argv[]) {
   char *config_str = pj_pool_alloc(pool, size);
   read_config_file(argv, argc, &size, config_str);
 
-  pj_xml_node *root;
+  pj_xml_node *root, *node;
   pj_xml_attr *attr;
 
   root = pj_xml_parse(pool, config_str, size);
   if(root == NULL) error_exit("Bad xml config file", -1);
-  pj_str_t acc = pj_str("general");
+  pj_str_t node_s = pj_str("general");
   pj_str_t name = pj_str("log-level");
 
-  root = pj_xml_find_node_rec(root, &acc);
-  if(root == NULL) error_exit("config node not found", -1);
-  attr = pj_xml_find_attr(root, &name, NULL);
+  node = pj_xml_find_node_rec(root, &node_s);
+  if(node == NULL) error_exit("config node not found", -1);
+  attr = pj_xml_find_attr(node, &name, NULL);
   if(attr == NULL) error_exit("config attribute not found", -1);
 
 
-  printf("name = %.*s\n", (int)root->name.slen, root->name);
-  printf("attr = %.*s\n", (int)attr->value.slen, attr->value);
+  
   
   /* Init pjsua */
   {
@@ -204,15 +196,64 @@ int main(int argc, char *argv[]) {
   status = pjsua_start();
   if (status != PJ_SUCCESS) error_exit("Error starting pjsua", status);
 
-  cmp_name[0] = pj_str("<sip:" SIP_USER1 "@" SIP_DOMAIN ">");
-  cmp_name[1] = pj_str("<sip:" SIP_USER2 "@" SIP_DOMAIN ">");
-  cmp_name[2] = pj_str("<sip:" SIP_USER3 "@" SIP_DOMAIN ">");
 
   /*register defined users*/
-  char *acc_name[NUMBER_OF_USERS] = {SIP_USER1, SIP_USER2, SIP_USER3};
-  for(int i = 0; i < NUMBER_OF_USERS; i++) {
-    acc_add(acc_name[i], &acc_id[i]);
+  //char *acc_name[USER_LIMIT] = {SIP_USER1, SIP_USER2, SIP_USER3};
+  node_s = pj_str("acc");
+  name = pj_str("username");
+  pj_str_t action = pj_str("action");
+
+  if(node == NULL) error_exit("config node not found", -1);
+
+  for(user_cnt = 0; user_cnt < USER_LIMIT; user_cnt++) {
+    /*search for 1st acc in xml tree*/
+    if(user_cnt == 0) { node = pj_xml_find_node_rec(root, &node_s); }
+    else { 
+      //if(node->next == NULL) {
+      if(pj_strcmp(&node->next->name, &node->name) != 0) {
+        /*no more accs in list*/
+        break;
+      }
+      acc[user_cnt].id = user_cnt;
+      node = node->next;
+    }
+    attr = pj_xml_find_attr(node, &name, NULL);
+      
+    if(attr == NULL) { 
+      
+       error_exit("acc name attribute not set", -1);
+    }
+    //acc[user_cnt].uri = pj_str("aaaaaaaaaaaaaaaaaaAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    
+    pj_strdup(pool, &acc[user_cnt].uri, &attr->value);
+    //pj_strncpy(&acc[user_cnt].uri, &attr->value, 20);
+    //acc[user_cnt].uri = attr->value;
+
+    //acc[user_cnt].uri = &attr->value;
+    //pj_memcpy(acc[user_cnt].uri, &attr->value, sizeof(pj_str_t *));
+
+    attr = pj_xml_find_attr(node, &action, NULL);
+    if(attr == NULL || pj_strcmp2(&attr->value, "play_tone") == 0) {
+      acc[user_cnt].action = TONE;
+    }
+    else {
+      if(pj_strcmp2(&attr->value, "play_file") == 0) {
+        acc[user_cnt].action = WAV;   
+      }
+      else if(pj_strcmp2(&attr->value, "play_both") == 0) {
+        acc[user_cnt].action = BOTH; 
+      }
+      else {
+        acc[user_cnt].action = TONE;
+      }
+    }
+    acc_add(acc[user_cnt].uri, &acc_id[user_cnt]);
   }
+  
+  
+
+    
+  
   /*wav doesn't work without it*/
   pjsua_set_null_snd_dev();
    

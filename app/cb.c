@@ -49,10 +49,13 @@ pjsip_rx_data *rdata) {
   ci.remote_info.ptr));
 
 
+  
   u_int8_t is_404 = 1;
-  for (int i = 0; i < NUMBER_OF_USERS; i++) {
-      
-    if(pj_strcmp(&cmp_name[i], &ci.local_info) == 0) {
+  for (int i = 0; i < user_cnt; i++) {
+    
+    //if(pj_strcmp(&acc[i].uri, &ci.local_info) == 0) {
+    /*dont cmp 1st & last chars of local_info (< >)*/
+    if(pj_strncmp2(&acc[i].uri, ci.local_info.ptr + 1, acc[i].uri.slen - 2) == 0) {
       if(cnt_calls < MAX_ONCALL) {
         cnt_calls++;
         /*search for free slot in call table*/
@@ -60,6 +63,7 @@ pjsip_rx_data *rdata) {
         for (table_slot = 0; table_slot < MAX_ONCALL; table_slot++) {
             if(call_info[table_slot].call_id == FREE) {
               call_info[table_slot].call_id = call_id;
+              call_info[table_slot].user_id = i;
               break;
            }
         }
@@ -124,19 +128,19 @@ void on_call_media_state(pjsua_call_id call_id) {
     /*dtmf digits connect to all accs*/
     pjsua_conf_connect(conf_slot[1], call_info[table_slot].conf_slot);
     pjsua_schedule_timer2(&disconnect_conf_cb, (void *)&call_info[table_slot].conf_slot, 1800);
-
     if (ci.media_status == PJSUA_CALL_MEDIA_ACTIVE) {
       /*joining media sources based on account name*/
-      if(pj_strcmp(&ci.local_info, &cmp_name[0]) == 0) {
+      //if(pj_strcmp(&ci.local_info, &cmp_name[0]) == 0) {
+      if(acc[call_info[table_slot].user_id].action == TONE) {
         /*tonegen connect*/
         pjsua_conf_connect(conf_slot[0], ci.conf_slot);
       }
-      if(pj_strcmp(&ci.local_info, &cmp_name[1]) == 0) {
+      if(acc[call_info[table_slot].user_id].action == WAV) {  
         /*wav connect*/
         pjsua_conf_connect(wav_slot, ci.conf_slot);
       }
-      if(pj_strcmp(&ci.local_info, &cmp_name[2]) == 0) {
-        /*tonegen and wav connect*/
+      if(acc[call_info[table_slot].user_id].action == BOTH) {
+       /*tonegen and wav connect*/
         pjsua_conf_connect(wav_slot, ci.conf_slot);
         pjsua_conf_connect(conf_slot[0], ci.conf_slot);
       }
