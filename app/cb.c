@@ -75,10 +75,12 @@ pjsip_rx_data *rdata) {
             if(call_info[table_slot].call_id == FREE) {
               call_info[table_slot].call_id = call_id;
               call_info[table_slot].user_id = i;
-              node = pj_xml_find_node(call_info[table_slot].root, &calling_str);
-              pj_strdup(pool, &node->content, &ci.remote_info);
-              node = pj_xml_find_node(call_info[table_slot].root, &called_str);
-              pj_strdup(pool, &node->content, &ci.local_info);
+              if(collect_cdr) {
+                node = pj_xml_find_node(call_info[table_slot].root, &calling_str);
+                pj_strdup(pool, &node->content, &ci.remote_info);
+                node = pj_xml_find_node(call_info[table_slot].root, &called_str);
+                pj_strdup(pool, &node->content, &ci.local_info);
+              }
               break;
            }
         }
@@ -103,6 +105,7 @@ pjsip_rx_data *rdata) {
 void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
 
   pjsua_call_info ci;
+  pj_status_t status;
 
   pj_xml_node *node;
 
@@ -123,42 +126,49 @@ void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
         pj_utoa(PJ_TIME_VAL_MSEC(call_info[table_slot].end), time);
         node->content = pj_str(time);
 
-        char xml[300];
+        char xml[1000];
 
         pj_oshandle_t file;
         pj_ssize_t size;
         
-        char file_name[100];
+        char file_name[1000] = { 0 };
         pj_str_t name;
         name.ptr = file_name;
         name.slen = 0;
 
-        node = pj_xml_find_node(call_info[table_slot].root, &duration_str);
-        pj_strcat(&name, &node->content);
-        name.ptr[name.slen] = '-';
-        name.slen++;
-        node = pj_xml_find_node(call_info[table_slot].root, &calling_str);
-        pj_strcat(&name, &node->content);
-        name.ptr[name.slen] = '-';
-        name.slen++;
-        node = pj_xml_find_node(call_info[table_slot].root, &called_str);
-        pj_strcat(&name, &node->content);
+
+        if (collect_cdr) {
+          /*generating cdr file name /tmp/cdr/%time_with_ms%-%A-%B.xml*/
+          pj_str_t path_str = pj_str(CDR_PATH);
+          pj_strcat(&name, &path_str);
         
-        pj_str_t xml_str = pj_str(".xml"); 
-        pj_strcat(&name, &xml_str);       
-        name.ptr[name.slen] = '\0';
-        name.slen++;
-
-
-        pj_file_open(pool, name.ptr, PJ_O_WRONLY, &file);
-        pj_xml_print(call_info[table_slot].root, xml, 5000, 1);
-
-        size = strlen(xml);
-        //size = 323;
-
-        pj_file_write(file, (void *) &xml, &size);
-        pj_file_close(file);
+          node = pj_xml_find_node(call_info[table_slot].root, &duration_str);
+          pj_strcat(&name, &node->content);
+          name.ptr[name.slen] = '-';
+          name.slen++;
+          node = pj_xml_find_node(call_info[table_slot].root, &calling_str);
+          pj_strcat(&name, &node->content);
+          name.ptr[name.slen] = '-';
+          name.slen++;
+          node = pj_xml_find_node(call_info[table_slot].root, &called_str);
+          pj_strcat(&name, &node->content);
         
+          pj_str_t xml_str = pj_str(".xml"); 
+          pj_strcat(&name, &xml_str);       
+          name.ptr[name.slen] = '\0';
+          name.slen++;
+
+          size = 1000;
+          status = pj_file_open(pool, name.ptr, PJ_O_WRONLY, &file);
+          if (status != PJ_SUCCESS) error_exit("Error open file", status);
+          pj_xml_print(call_info[table_slot].root, xml, size, 1);
+
+          size = strlen(xml);
+        
+          pj_file_write(file, (void *) &xml, &size);
+          pj_file_close(file);
+        
+        }
         call_info[table_slot].call_id = FREE;
         call_info[table_slot].conf_slot = FREE;
         cnt_calls--;

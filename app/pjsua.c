@@ -171,8 +171,6 @@ int main(int argc, char *argv[]) {
   char *config_str = pj_pool_alloc(pool, size);
   read_config_file(argv, argc, &size, config_str);
 
-  init_cdr_xml_tree();
-
   pj_xml_node *root, *node;
   pj_xml_attr *attr;
 
@@ -186,8 +184,7 @@ int main(int argc, char *argv[]) {
   attr = pj_xml_find_attr(node, &name, NULL);
   if(attr == NULL) error_exit("config attribute not found", -1);
 
-  
-  
+
   /* Init pjsua */
   {
     pjsua_config cfg;
@@ -211,6 +208,21 @@ int main(int argc, char *argv[]) {
     if (status != PJ_SUCCESS) error_exit("Error in pjsua_init()", status);
   }
 
+  pj_str_t cdr = pj_str("collect-cdr");
+  attr = pj_xml_find_attr(node, &cdr, NULL);
+  if (attr != NULL) {
+    if(pj_strcmp2(&attr->value, "yes") == 0) {
+      collect_cdr = 1;
+    }
+    else { collect_cdr = 0; }
+  }
+  else { collect_cdr = 0; }
+
+  if(collect_cdr == 1) {
+    init_cdr_xml_tree();
+    mkdir(CDR_PATH, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  }
+
  /* Add UDP transport. */
   {
     pjsua_transport_config cfg;
@@ -227,7 +239,6 @@ int main(int argc, char *argv[]) {
 
 
   /*register defined users*/
-  //char *acc_name[USER_LIMIT] = {SIP_USER1, SIP_USER2, SIP_USER3};
   node_s = pj_str("acc");
   name = pj_str("username");
   pj_str_t action = pj_str("action");

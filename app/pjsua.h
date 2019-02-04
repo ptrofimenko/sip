@@ -4,12 +4,14 @@
 #define THIS_FILE 		"APP"
 #define WAVE_FILE 		"Sound.wav"
 #define CONFIG_FILE		"config.xml" 
+#define CDR_PATH		"/tmp/cdr/"
 
 #define SIP_DOMAIN 		"10.25.72.55"
 #define SIP_USER1 		"alice"
 #define SIP_USER2 		"bob"
 #define SIP_USER3           	"boblice"
 #define SIP_PASSWD 		"secret"
+
 
 #define USER_LIMIT		10
 
@@ -41,6 +43,7 @@
 #define BOTH			22
 
 #include <stdio.h>
+#include <sys/stat.h>
 #include <pjsua-lib/pjsua.h>
 
 pjsua_conf_port_id conf_slot[NUM_OF_TONEGENS];
@@ -61,6 +64,8 @@ pj_str_t call_info_str;
 pj_str_t calling_str;
 pj_str_t called_str;
 pj_str_t duration_str;
+
+int collect_cdr;
 
 typedef struct {
 	pjsua_call_id call_id;
