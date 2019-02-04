@@ -40,14 +40,8 @@
 #define TONE   			21
 #define BOTH			22
 
-/*for sprintf*/
-#include <stdio.h>	
-#include <string.h>
-#include <unistd.h>
+#include <stdio.h>
 #include <pjsua-lib/pjsua.h>
-
-
-
 
 pjsua_conf_port_id conf_slot[NUM_OF_TONEGENS];
 pjsua_conf_port_id wav_slot;
@@ -63,11 +57,21 @@ pj_pool_t *pool_tone[NUM_OF_TONEGENS], *pool_wav;
 pjmedia_port *port[NUM_OF_TONEGENS], *port_wav;
 
 
+pj_str_t call_info_str;
+pj_str_t calling_str;
+pj_str_t called_str;
+pj_str_t duration_str;
+
 typedef struct {
 	pjsua_call_id call_id;
 	pjsua_conf_port_id conf_slot;
 	pj_timer_entry timer_entry;
 	u_int8_t user_id;
+	/*start & end time of call*/ 
+	pj_time_val start, end;
+	/*root node for xml tree (for log file)*/
+	pj_xml_node *root;
+
 } call_info_table;
 
 call_info_table call_info[MAX_ONCALL];
@@ -87,6 +91,7 @@ void create_wav_port();
 void create_tonegen_port(u_int8_t port_num);
 void create_tonegen_dig_port(u_int8_t port_num);
 void read_config_file(char *argv[], int argc, pj_ssize_t *size, char *config_str);
+void init_cdr_xml_tree();
 
 void timer_callback2(void *user_data);
 void timer_hangup_callback(pj_timer_heap_t *ht, pj_timer_entry *e);

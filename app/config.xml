@@ -1,5 +1,5 @@
 <config>
-    <general log-level="2" />
+    <general log-level="4" />
     <accounts>
         <acc username="sip:alice@10.25.72.55" action="play_tone" />
         <acc username="sip:bob@10.25.72.55" action="play_file" />

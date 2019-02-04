@@ -30,6 +30,11 @@ void timer_callback2(void *user_data)
 {
     pjsua_call_id *call_id = (pjsua_call_id *) user_data;
     pjsua_call_answer(*call_id, 200, NULL, NULL);
+    for (int i = 0; i < MAX_ONCALL; i++) {
+      if(*call_id == call_info[i].call_id) {
+        pj_gettimeofday(&call_info[i].start);
+      }
+    }
 }
 
 
@@ -38,6 +43,9 @@ void on_incoming_call(pjsua_acc_id acc_id, pjsua_call_id call_id,
 pjsip_rx_data *rdata) {
   
   pjsua_call_info ci;
+  pj_xml_node *node;
+
+  pj_status_t status;
 
   PJ_UNUSED_ARG(acc_id);
   PJ_UNUSED_ARG(rdata);
@@ -64,6 +72,10 @@ pjsip_rx_data *rdata) {
             if(call_info[table_slot].call_id == FREE) {
               call_info[table_slot].call_id = call_id;
               call_info[table_slot].user_id = i;
+              node = pj_xml_find_node(call_info[table_slot].root, &calling_str);
+              pj_strdup(pool, &node->content, &ci.remote_info);
+              node = pj_xml_find_node(call_info[table_slot].root, &called_str);
+              pj_strdup(pool, &node->content, &ci.local_info);
               break;
            }
         }
@@ -89,6 +101,8 @@ void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
 
   pjsua_call_info ci;
 
+  pj_xml_node *node;
+
   PJ_UNUSED_ARG(e);
   
   pjsua_call_get_info(call_id, &ci);
@@ -97,6 +111,28 @@ void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
       if(call_info[table_slot].call_id == call_id) {
         /*free slot in call_info table*/
         pjsua_cancel_timer(&call_info[table_slot].timer_entry);
+        
+        pj_gettimeofday(&call_info[table_slot].end);
+        PJ_TIME_VAL_SUB(call_info[table_slot].end, call_info[table_slot].start);
+        
+        node = pj_xml_find_node(call_info[table_slot].root, &duration_str);
+        char time[10];
+        pj_utoa(PJ_TIME_VAL_MSEC(call_info[table_slot].end), time);
+        node->content = pj_str(time);
+
+        char xml[300];
+
+        pj_oshandle_t file;
+        pj_ssize_t size;
+        pj_file_open(pool, "123.xml", PJ_O_WRONLY, &file);
+        pj_xml_print(call_info[table_slot].root, xml, 5000, 1);
+
+        size = strlen(xml);
+        //size = 323;
+
+        pj_file_write(file, (void *) &xml, &size);
+        pj_file_close(file);
+        
         call_info[table_slot].call_id = FREE;
         call_info[table_slot].conf_slot = FREE;
         cnt_calls--;

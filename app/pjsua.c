@@ -106,6 +106,34 @@ void read_config_file(char *argv[], int argc, pj_ssize_t *size, char *config_str
   pj_file_close(file);
 }
 
+
+
+void init_cdr_xml_tree()
+{
+  pj_xml_node *node;
+
+  /*node names*/
+  call_info_str = pj_str("call_info");
+  calling_str = pj_str("calling");
+  called_str = pj_str("called");
+  duration_str = pj_str("duration");
+  /* cdr xml tree structure
+  <call_info>
+    <calling></calling>
+    <called></called>
+    <duration></duration>
+  </call_info>
+  */  
+  for (int i = 0; i < MAX_ONCALL; i++) {
+    call_info[i].root = pj_xml_node_new(pool, &call_info_str);
+    node = pj_xml_node_new(pool, &calling_str);
+    pj_xml_add_node(call_info[i].root, node);
+    node = pj_xml_node_new(pool, &called_str);
+    pj_xml_add_node(call_info[i].root, node);
+    node = pj_xml_node_new(pool, &duration_str);
+    pj_xml_add_node(call_info[i].root, node);
+  }
+}
 /*
  * main()
  *
@@ -143,6 +171,8 @@ int main(int argc, char *argv[]) {
   char *config_str = pj_pool_alloc(pool, size);
   read_config_file(argv, argc, &size, config_str);
 
+  init_cdr_xml_tree();
+
   pj_xml_node *root, *node;
   pj_xml_attr *attr;
 
@@ -155,7 +185,6 @@ int main(int argc, char *argv[]) {
   if(node == NULL) error_exit("config node not found", -1);
   attr = pj_xml_find_attr(node, &name, NULL);
   if(attr == NULL) error_exit("config attribute not found", -1);
-
 
   
   
@@ -223,15 +252,11 @@ int main(int argc, char *argv[]) {
       
        error_exit("acc name attribute not set", -1);
     }
-    //acc[user_cnt].uri = pj_str("aaaaaaaaaaaaaaaaaaAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     
+    /*duplicate caller name from xml tree*/
     pj_strdup(pool, &acc[user_cnt].uri, &attr->value);
-    //pj_strncpy(&acc[user_cnt].uri, &attr->value, 20);
-    //acc[user_cnt].uri = attr->value;
 
-    //acc[user_cnt].uri = &attr->value;
-    //pj_memcpy(acc[user_cnt].uri, &attr->value, sizeof(pj_str_t *));
-
+    /*parse action for user*/
     attr = pj_xml_find_attr(node, &action, NULL);
     if(attr == NULL || pj_strcmp2(&attr->value, "play_tone") == 0) {
       acc[user_cnt].action = TONE;
@@ -247,6 +272,7 @@ int main(int argc, char *argv[]) {
         acc[user_cnt].action = TONE;
       }
     }
+    
     acc_add(acc[user_cnt].uri, &acc_id[user_cnt]);
   }
   
@@ -301,6 +327,8 @@ int main(int argc, char *argv[]) {
   status = pjsua_conf_add_port(pool_tone[1], port[1], &conf_slot[1]);
   pj_assert(status == PJ_SUCCESS);
     
+  
+  long int time = PJ_TIME_VAL_MSEC(call_info[0].end);
   /* Wait until user press "q" to quit. */
   for (;;) {
     char option[10];
@@ -311,11 +339,16 @@ int main(int argc, char *argv[]) {
       break;
     }
 
-    if (option[0] == 'q')
-    break;
+    if (option[0] == 'q') {
+      pjsua_call_hangup_all();
+      break;
+    }
 
     if (option[0] == 'h')
       pjsua_call_hangup_all();
+
+    time = PJ_TIME_VAL_MSEC(call_info[0].end);
+    
   }  
   
   /*destroy tonegens*/
@@ -328,17 +361,17 @@ int main(int argc, char *argv[]) {
 
   /*destroy wav*/
   pjmedia_port_destroy(port_wav);  
-  pj_pool_release(pool_wav);
   pjmedia_endpt_destroy(med_endpt_wav);
+  pj_pool_release(pool_wav);
   pj_caching_pool_destroy(&cp_wav);
 
 
   /*release app pool*/
   pj_pool_release(pool);
 
-
-  pjsua_destroy();
   pj_shutdown();
 
+  pjsua_destroy();
+  
   return 0;
 }
