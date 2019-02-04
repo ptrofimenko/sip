@@ -29,10 +29,13 @@ void timer_hangup_callback(pj_timer_heap_t *ht, pj_timer_entry *e)
 void timer_callback2(void *user_data)
 {
     pjsua_call_id *call_id = (pjsua_call_id *) user_data;
-    pjsua_call_answer(*call_id, 200, NULL, NULL);
-    for (int i = 0; i < MAX_ONCALL; i++) {
-      if(*call_id == call_info[i].call_id) {
-        pj_gettimeofday(&call_info[i].start);
+      
+    if(*call_id != FREE) {
+      pjsua_call_answer(*call_id, 200, NULL, NULL);
+      for (int i = 0; i < MAX_ONCALL; i++) {
+        if(*call_id == call_info[i].call_id) {
+          pj_gettimeofday(&call_info[i].start);
+        }
       }
     }
 }
@@ -124,7 +127,30 @@ void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
 
         pj_oshandle_t file;
         pj_ssize_t size;
-        pj_file_open(pool, "123.xml", PJ_O_WRONLY, &file);
+        
+        char file_name[100];
+        pj_str_t name;
+        name.ptr = file_name;
+        name.slen = 0;
+
+        node = pj_xml_find_node(call_info[table_slot].root, &duration_str);
+        pj_strcat(&name, &node->content);
+        name.ptr[name.slen] = '-';
+        name.slen++;
+        node = pj_xml_find_node(call_info[table_slot].root, &calling_str);
+        pj_strcat(&name, &node->content);
+        name.ptr[name.slen] = '-';
+        name.slen++;
+        node = pj_xml_find_node(call_info[table_slot].root, &called_str);
+        pj_strcat(&name, &node->content);
+        
+        pj_str_t xml_str = pj_str(".xml"); 
+        pj_strcat(&name, &xml_str);       
+        name.ptr[name.slen] = '\0';
+        name.slen++;
+
+
+        pj_file_open(pool, name.ptr, PJ_O_WRONLY, &file);
         pj_xml_print(call_info[table_slot].root, xml, 5000, 1);
 
         size = strlen(xml);
