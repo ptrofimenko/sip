@@ -32,9 +32,11 @@ void timer_callback2(void *user_data)
       
     if(*call_id != FREE) {
       pjsua_call_answer(*call_id, 200, NULL, NULL);
-      for (int i = 0; i < MAX_ONCALL; i++) {
-        if(*call_id == call_info[i].call_id) {
-          pj_gettimeofday(&call_info[i].start);
+      if (collect_cdr == 1) {
+        for (int i = 0; i < MAX_ONCALL; i++) {
+          if(*call_id == call_info[i].call_id) {
+            pj_gettimeofday(&call_info[i].start);
+          }
         }
       }
     }
@@ -64,7 +66,6 @@ pjsip_rx_data *rdata) {
   u_int8_t is_404 = 1;
   for (int i = 0; i < user_cnt; i++) {
     
-    //if(pj_strcmp(&acc[i].uri, &ci.local_info) == 0) {
     /*dont cmp 1st & last chars of local_info (< >)*/
     if(pj_strncmp2(&acc[i].uri, ci.local_info.ptr + 1, acc[i].uri.slen - 2) == 0) {
       if(cnt_calls < MAX_ONCALL) {
@@ -118,26 +119,25 @@ void on_call_state(pjsua_call_id call_id, pjsip_event *e) {
         /*free slot in call_info table*/
         pjsua_cancel_timer(&call_info[table_slot].timer_entry);
         
-        pj_gettimeofday(&call_info[table_slot].end);
-        PJ_TIME_VAL_SUB(call_info[table_slot].end, call_info[table_slot].start);
+        if (collect_cdr == 1) {
+          pj_gettimeofday(&call_info[table_slot].end);
+          PJ_TIME_VAL_SUB(call_info[table_slot].end, call_info[table_slot].start);
+                  
+          node = pj_xml_find_node(call_info[table_slot].root, &duration_str);
+          char time[10];
+          pj_utoa(PJ_TIME_VAL_MSEC(call_info[table_slot].end), time);
+          node->content = pj_str(time);
+
+          char xml[1000];
+
+          pj_oshandle_t file;
+          pj_ssize_t size;
         
-        node = pj_xml_find_node(call_info[table_slot].root, &duration_str);
-        char time[10];
-        pj_utoa(PJ_TIME_VAL_MSEC(call_info[table_slot].end), time);
-        node->content = pj_str(time);
+          char file_name[1000] = { 0 };
+          pj_str_t name;
+          name.ptr = file_name;
+          name.slen = 0;
 
-        char xml[1000];
-
-        pj_oshandle_t file;
-        pj_ssize_t size;
-        
-        char file_name[1000] = { 0 };
-        pj_str_t name;
-        name.ptr = file_name;
-        name.slen = 0;
-
-
-        if (collect_cdr) {
           /*generating cdr file name /tmp/cdr/%time_with_ms%-%A-%B.xml*/
           pj_str_t path_str = pj_str(CDR_PATH);
           pj_strcat(&name, &path_str);
@@ -218,18 +218,6 @@ void on_call_media_state(pjsua_call_id call_id) {
       }
     }
 }
-
-
-/*static void timer_hangup_callback(void *user_data)
-{
-    pjsua_call_id *call_id = (pjsua_call_id *) user_data;
-      
-    if (*call_id != FREE) {
-      pjsua_call_hangup(*call_id, 200, NULL, NULL);
-    }
-
-}*/
-
 
 /*template callback pjsua_schedule_timer*/
 /*static void timer_callback(pj_timer_heap_t *ht, pj_timer_entry *e)

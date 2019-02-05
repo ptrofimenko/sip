@@ -238,7 +238,7 @@ int main(int argc, char *argv[]) {
   if (status != PJ_SUCCESS) error_exit("Error starting pjsua", status);
 
 
-  /*register defined users*/
+    /*register defined users*/
   node_s = pj_str("acc");
   name = pj_str("username");
   pj_str_t action = pj_str("action");
@@ -286,10 +286,6 @@ int main(int argc, char *argv[]) {
     
     acc_add(acc[user_cnt].uri, &acc_id[user_cnt]);
   }
-  
-  
-
-    
   
   /*wav doesn't work without it*/
   pjsua_set_null_snd_dev();
@@ -379,8 +375,7 @@ int main(int argc, char *argv[]) {
 
   /*release app pool*/
   pj_pool_release(pool);
-
-  pj_shutdown();
+  pj_caching_pool_destroy(&cp);
 
   pjsua_destroy();
   
